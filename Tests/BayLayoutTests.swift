@@ -38,7 +38,9 @@ final class BayLayoutTests: XCTestCase {
             let l = BayLayout(baySize: size)
             for row in 0..<BayLayout.rows {
                 for col in 0..<BayLayout.columns {
-                    XCTAssertEqual(l.boxFrame(row: row, col: col).maxY, l.plankFrame(row: row).minY, accuracy: 0.001)
+                    // Boxes rest a little way onto the plank's top surface, never below it.
+                    XCTAssertEqual(l.boxFrame(row: row, col: col).maxY, l.plankFrame(row: row).minY + l.boxRestInset, accuracy: 0.001)
+                    XCTAssertLessThan(l.boxRestInset, l.plankSurfaceH)
                 }
                 XCTAssertEqual(l.plankFrame(row: row).width, size.width, accuracy: 0.001)
             }

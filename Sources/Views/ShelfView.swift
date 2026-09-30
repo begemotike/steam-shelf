@@ -445,7 +445,16 @@ struct PlankView: View {
                 .blendMode(.screen)
                 .opacity(model.lightsOn ? 1 : 0)
             VStack(spacing: 0) {
-                Theme.Palette.walnutHighlight.opacity(0.8).frame(height: 1)
+                // Top surface: lighter, catching the room light (and the strip above when lit).
+                ZStack(alignment: .top) {
+                    LinearGradient(colors: [Theme.Palette.walnutHighlight.opacity(model.lightsOn ? 0.75 : 0.55),
+                                            Theme.Palette.walnutHighlight.opacity(0.25)],
+                                   startPoint: .top, endPoint: .bottom)
+                    Color.white.opacity(0.35).frame(height: 1)
+                }
+                .frame(height: 7 * s)
+                // Front edge line where the surface turns down into the face.
+                Color.black.opacity(0.35).frame(height: max(1, 1 * s))
                 Spacer(minLength: 0)
                 Color.black.opacity(0.4).frame(height: 2)
             }
@@ -487,10 +496,10 @@ struct ShelfPageView: View {
             ForEach(Array(pageEntries.enumerated()), id: \.element.appID) { index, entry in
                 let f = layout.boxFrame(row: index / Pagination.columns, col: index % Pagination.columns)
                 Ellipse()
-                    .fill(Color.black.opacity(0.45))
-                    .frame(width: f.width * 0.9, height: 8 * s)
-                    .blur(radius: 4 * s)
-                    .offset(x: f.minX + f.width * 0.05, y: f.maxY - 2 * s - 4 * s)
+                    .fill(Color.black.opacity(0.5))
+                    .frame(width: f.width * 0.96, height: 6 * s)
+                    .blur(radius: 3 * s)
+                    .offset(x: f.minX + f.width * 0.02, y: f.maxY - 3 * s)
                 BoxTile(entry: entry)
                     .frame(width: f.width, height: f.height)
                     .offset(x: f.minX, y: f.minY)

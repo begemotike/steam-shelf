@@ -14,6 +14,12 @@ struct BayLayout: Equatable, Sendable {
 
     let baySize: CGSize
     let boxW, boxH, gap, sidePad, rowH, plankH, scale: CGFloat
+    /// The plank's visible top surface (we look slightly down onto the shelf). Boxes stand on it,
+    /// so their bottom edge sits this far below the plank's top edge, with the rest of the surface
+    /// showing in front of them.
+    static let surfaceRatio: CGFloat = 7.0 / 180.0
+    var plankSurfaceH: CGFloat { boxH * Self.surfaceRatio }
+    var boxRestInset: CGFloat { plankSurfaceH * 0.4 }
 
     init(baySize: CGSize) {
         self.baySize = baySize
@@ -34,7 +40,7 @@ struct BayLayout: Equatable, Sendable {
 
     func boxFrame(row: Int, col: Int) -> CGRect {
         CGRect(x: sidePad + CGFloat(col) * (boxW + gap),
-               y: CGFloat(row + 1) * rowH - plankH - boxH,
+               y: CGFloat(row + 1) * rowH - plankH + boxRestInset - boxH,
                width: boxW, height: boxH)
     }
 
