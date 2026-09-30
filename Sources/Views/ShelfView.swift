@@ -20,6 +20,7 @@ extension UTType {
 struct ShelfView: View {
     @Environment(AppModel.self) private var model
     @State private var textures = TextureLibrary.shared
+    @State private var swipes = SwipeMonitor()
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -75,6 +76,14 @@ struct ShelfView: View {
         } message: { text in
             Text(text)
         }
+        .onAppear {
+            guard model.mode != .tests else { return }
+            let model = model
+            swipes.start(in: { NSApp.windows.first { $0.title == "Steam Shelf" } ?? NSApp.keyWindow },
+                         enabled: { model.openedAppID == nil },
+                         handler: { step in model.go(to: model.pageIndex + step) })
+        }
+        .onDisappear { swipes.stop() }
         .task {
             guard model.mode != .tests else { return }
             focused = true
