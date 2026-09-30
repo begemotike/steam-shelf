@@ -360,17 +360,19 @@ private struct BayContent: View {
                     .frame(width: 14)
             }
 
-            // Planks (frame layer: they do not slide with the page).
+            PageContainerView(layout: layout)
+                .frame(width: size.width, height: size.height)
+                .clipped()
+
+            // Planks (frame layer: they do not slide with the page) drawn in front of the boxes,
+            // so each box's base disappears behind the shelf edge and reads as standing on it.
             ForEach(0..<BayLayout.rows, id: \.self) { r in
                 let f = layout.plankFrame(row: r)
                 PlankView()
                     .frame(width: f.width, height: f.height)
                     .offset(x: f.minX, y: f.minY)
+                    .allowsHitTesting(false)
             }
-
-            PageContainerView(layout: layout)
-                .frame(width: size.width, height: size.height)
-                .clipped()
 
             if model.document.shelvedEntries.isEmpty {
                 EmptyShelfCard()
@@ -496,10 +498,10 @@ struct ShelfPageView: View {
             ForEach(Array(pageEntries.enumerated()), id: \.element.appID) { index, entry in
                 let f = layout.boxFrame(row: index / Pagination.columns, col: index % Pagination.columns)
                 Ellipse()
-                    .fill(Color.black.opacity(0.5))
-                    .frame(width: f.width * 0.96, height: 6 * s)
+                    .fill(Color.black.opacity(0.55))
+                    .frame(width: f.width * 1.04, height: 8 * s)
                     .blur(radius: 3 * s)
-                    .offset(x: f.minX + f.width * 0.02, y: f.maxY - 3 * s)
+                    .offset(x: f.minX - f.width * 0.02, y: f.maxY - layout.boxRestInset - 4 * s)
                 BoxTile(entry: entry)
                     .frame(width: f.width, height: f.height)
                     .offset(x: f.minX, y: f.minY)

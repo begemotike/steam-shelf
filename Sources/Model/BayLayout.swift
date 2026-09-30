@@ -17,9 +17,10 @@ struct BayLayout: Equatable, Sendable {
     /// The plank's visible top surface (we look slightly down onto the shelf). Boxes stand on it,
     /// so their bottom edge sits this far below the plank's top edge, with the rest of the surface
     /// showing in front of them.
-    static let surfaceRatio: CGFloat = 7.0 / 180.0
+    static let surfaceRatio: CGFloat = 8.0 / 180.0
     var plankSurfaceH: CGFloat { boxH * Self.surfaceRatio }
-    var boxRestInset: CGFloat { plankSurfaceH * 0.4 }
+    /// Planks draw in front of the boxes, so this much of each box's base is hidden behind the shelf edge.
+    var boxRestInset: CGFloat { plankSurfaceH * 0.75 }
 
     init(baySize: CGSize) {
         self.baySize = baySize
