@@ -42,8 +42,23 @@ xcodebuild -project $APP_NAME.xcodeproj -scheme $APP_NAME -configuration Release
 APP="$OUT/$APP_NAME.xcarchive/Products/Applications/$APP_NAME.app"
 [[ -d "$APP" ]] || { echo "archive did not produce $APP"; exit 1; }
 
+echo "▶ Re-signing Sparkle's nested helpers with Developer ID (Xcode leaves them with Sparkle's certificate)"
+IDENTITY="Developer ID Application"
+SPARKLE_FW="$APP/Contents/Frameworks/Sparkle.framework"
+resign() { codesign -f --timestamp -o runtime --preserve-metadata=entitlements -s "$IDENTITY" "$1"; }
+resign "$SPARKLE_FW/Versions/B/XPCServices/Installer.xpc"
+resign "$SPARKLE_FW/Versions/B/XPCServices/Downloader.xpc"
+resign "$SPARKLE_FW/Versions/B/Autoupdate"
+resign "$SPARKLE_FW/Versions/B/Updater.app"
+resign "$SPARKLE_FW"
+resign "$APP"
+
 echo "▶ Verifying signature"
 codesign --verify --deep --strict --verbose=2 "$APP"
+for bin in "$SPARKLE_FW/Versions/B/Updater.app" "$SPARKLE_FW/Versions/B/Autoupdate" \
+           "$SPARKLE_FW/Versions/B/XPCServices/Installer.xpc" "$SPARKLE_FW/Versions/B/XPCServices/Downloader.xpc"; do
+  codesign -dvv "$bin" 2>&1 | grep -q "Authority=Developer ID Application" || { echo "nested binary not Developer ID signed: $bin"; exit 1; }
+done
 codesign -dvv "$APP" 2>&1 | grep -E "Authority=Developer ID Application" >/dev/null || { echo "not signed with Developer ID"; exit 1; }
 
 echo "▶ Zipping"
@@ -51,7 +66,13 @@ ditto -c -k --keepParent "$APP" "$OUT/$ZIP"
 
 if [[ -z "$DRY_RUN" ]]; then
   echo "▶ Notarizing (this takes a few minutes)"
-  xcrun notarytool submit "$OUT/$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun notarytool submit "$OUT/$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait | tee "$OUT/notarize.log"
+  if ! grep -q "status: Accepted" "$OUT/notarize.log"; then
+    ID=$(grep -m1 "id:" "$OUT/notarize.log" | awk '{print $2}')
+    echo "✖ Notarization was not accepted. Details:"
+    xcrun notarytool log "$ID" --keychain-profile "$NOTARY_PROFILE" | head -40
+    exit 1
+  fi
   echo "▶ Stapling"
   xcrun stapler staple "$APP"
   rm -f "$OUT/$ZIP"; ditto -c -k --keepParent "$APP" "$OUT/$ZIP"
