@@ -322,16 +322,39 @@ enum SlideDirection: Sendable { case forward, backward }
         steamAvailable = SteamInstalls.isSteamAvailable
         installedAppIDs = SteamInstalls.scan()
         Self.log.info("Steam client available: \(self.steamAvailable, privacy: .public); installed games known: \(self.installedAppIDs?.count ?? -1, privacy: .public)")
+        #if DEBUG
+        if let sample = installedAppIDs?.sorted().first {
+            let bundle = SteamInstalls.launchBundle(appID: sample)?.lastPathComponent ?? "none found"
+            Self.log.info("Direct-launch probe for app \(sample, privacy: .public): \(bundle, privacy: .public)")
+        }
+        #endif
     }
 
     /// Whether the Play/Install button should show for the opened box.
     var canLaunchGames: Bool { mode == .normal && !isDemo && steamAvailable && source.sourceID == "local" }
 
-    /// Hands the game to the Steam client (which launches it, or offers to install it).
+    /// Opens the game's own app bundle from its install folder when we can find it; otherwise hands
+    /// the game to the Steam client (which launches it, or offers to install it).
     func launch(_ appID: Int) {
-        guard canLaunchGames, let url = SteamInstalls.launchURL(appID: appID) else { return }
-        NSWorkspace.shared.open(url)
+        guard canLaunchGames else { return }
         let title = document.entries.first { $0.appID == appID }?.title ?? "game"
+        if installState(for: appID) != .notInstalled, let bundle = SteamInstalls.launchBundle(appID: appID) {
+            showTransient("Launching \(title)…")
+            NSWorkspace.shared.openApplication(at: bundle, configuration: NSWorkspace.OpenConfiguration()) { _, error in
+                guard let error else { return }
+                Task { @MainActor in
+                    Self.log.error("Direct launch failed: \(String(describing: error), privacy: .public)")
+                    self.launchViaSteam(appID, title: title)
+                }
+            }
+        } else {
+            launchViaSteam(appID, title: title)
+        }
+    }
+
+    private func launchViaSteam(_ appID: Int, title: String) {
+        guard let url = SteamInstalls.launchURL(appID: appID) else { return }
+        NSWorkspace.shared.open(url)
         showTransient(installState(for: appID) == .notInstalled ? "Asking Steam to install \(title)…" : "Handing \(title) to Steam…")
     }
 

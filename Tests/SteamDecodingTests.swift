@@ -153,4 +153,32 @@ final class SteamDecodingTests: XCTestCase {
         XCTAssertEqual(SteamInstalls.installedAppIDs(vdf: "\"libraryfolders\"\n{\n}"), [])
         XCTAssertEqual(SteamInstalls.launchURL(appID: 620)?.absoluteString, "steam://rungameid/620")
     }
+
+    func testLibraryPathsInstallDirAndBundlePicking() throws {
+        let vdf = #"""
+        "libraryfolders"
+        {
+        	"0"	{ "path"		"/Users/x/Library/Application Support/Steam" }
+        	"1"	{ "path"		"/Volumes/Games/SteamLibrary" }
+        }
+        """#
+        XCTAssertEqual(SteamInstalls.libraryPaths(vdf: vdf), ["/Users/x/Library/Application Support/Steam", "/Volumes/Games/SteamLibrary"])
+        XCTAssertEqual(SteamInstalls.installDir(manifest: "\"AppState\"\n{\n\t\"appid\"\t\"620\"\n\t\"installdir\"\t\t\"Portal 2\"\n}"), "Portal 2")
+
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appending(path: "steamshelf-bundle-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: root) }
+        // Top-level bundle wins over a deeper one; among siblings the name matching the folder wins over a launcher.
+        let game = root.appending(path: "Crusader Kings III")
+        try fm.createDirectory(at: game.appending(path: "binaries/ck3.app"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: game.appending(path: "launcher/deep/too.app"), withIntermediateDirectories: true)
+        XCTAssertEqual(SteamInstalls.appBundle(inInstallFolder: game)?.lastPathComponent, "ck3.app")
+        let warband = root.appending(path: "MountBlade Warband")
+        try fm.createDirectory(at: warband.appending(path: "Mount and Blade Launcher.app"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: warband.appending(path: "Mount and Blade Warband.app"), withIntermediateDirectories: true)
+        XCTAssertEqual(SteamInstalls.appBundle(inInstallFolder: warband)?.lastPathComponent, "Mount and Blade Warband.app")
+        let bare = root.appending(path: "rocketleague")
+        try fm.createDirectory(at: bare.appending(path: "Binaries"), withIntermediateDirectories: true)
+        XCTAssertNil(SteamInstalls.appBundle(inInstallFolder: bare))
+    }
 }
