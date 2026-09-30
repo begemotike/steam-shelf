@@ -1,0 +1,30 @@
+# Steam Shelf — Open Questions (defaults already chosen)
+
+Each item is built with the **default** shown. Revisit any time; none block v1.
+
+| # | Question | v1 default | Why / what changing it costs |
+|---|---|---|---|
+| Q1 | Steam doesn't expose purchase dates through the Web API (only the logged-in licenses page does). Do you want a way to fill them in automatically? | Manual date field, empty by default. The back of the box also shows "Last played" and "On shelf since". | Auto-fill would mean either an embedded Steam login web view that scrapes `store.steampowered.com/account/licenses/` (fragile, and your Steam session would live in the app) or a paste-your-licenses-page importer. The importer is the safer add-on if you want it. |
+| Q2 | Should games be reorderable on the shelf by dragging? | Alphabetical order (case-insensitive), fixed. The document already stores an explicit order, so drag-to-reorder can be added without changing the format. | About half a day: drag-and-drop between slots plus page-edge auto-flip. |
+| Q3 | Is the engine choice right: 2D SwiftUI shelf + a RealityKit box only when one is open? | Yes. | Going full 3D (the whole bookcase in RealityKit) would allow real camera moves but costs a lot of effort and risks frame drops with 16 textured boxes, all to get a look SwiftUI already does well. SceneKit was ruled out because Apple has soft-deprecated it. |
+| Q4 | SwiftData stores each shelf as one JSON blob (`ShelfRecord.documentData`) instead of a table per game. OK? | Yes, blob. The `ShelfDocument` is the real schema, and this keeps that schema in one place. | Per-game tables would only pay off with thousands of entries or cross-shelf queries. If SwiftData feels like overkill, a plain JSON file in Application Support would do the same job in fewer lines. |
+| Q5 | When you untick a game, should its notes and rating be kept? | Kept (`isShelved = false`) and restored if you tick it again. Shared shelves leave unticked games out (`forSharing()`). | Deleting them outright would be simpler but loses notes if you misclick. |
+| Q6 | Star rating: whole stars or half stars? | Whole stars, 1–5, and blank means unrated. | Half stars need a finer control and an `Int` from 1 to 10. That's a document version bump. |
+| Q7 | Fetch store details (genres, developer, release date) from `appdetails`? | Not in v1. The slot is reserved in `BackOfBoxContext.storeDetails` for the AI blurbs. | The endpoint takes one app per call and allows roughly 200 calls per 5 minutes, so it has to be fetched lazily and cached. It makes most sense to add it together with the AI provider. |
+| Q8 | Which AI vendor and model should write the future blurbs, and where does its key live? | Not built. The seam is `AIBackOfBoxProvider` behind `BackOfBoxProvider`, with the key in Keychain under account `ai-api-key`. | Decide when you build it. Claude via the Anthropic API fits naturally. |
+| Q9 | Which P2P transport: MultipeerConnectivity (LAN/nearby), iCloud/CloudKit sharing, or a small relay (for example a Cloudflare Worker)? | Not built. The payload is `ShelfDocumentCodec.encode(doc.forSharing())`, which carries cover art as public CDN URLs and needs no key on the viewer's side. | Multipeer only works on the same network. CloudKit needs a paid team ID and signing. A relay needs hosting, which you already have on Workers. |
+| Q10 | Code signing: ad-hoc (`-`) or your Apple Developer team? | Ad-hoc. It builds headlessly with no account, but after each rebuild macOS asks again for Keychain access ("Always Allow"). | Setting `DEVELOPMENT_TEAM` in project.yml removes the Keychain prompts and enables notarized distribution. It's also required for CloudKit (Q9). |
+| Q11 | Should the shelf title be your Steam persona name or custom text? | "<Persona>'s Shelf" when connected, "My Shelf" otherwise. The title is stored in the document. | Adding a rename field in Settings is trivial. |
+| Q12 | App icon? | None in v1 (generic app icon). | A procedurally drawn icon (a walnut box with a brass plate) could be rendered once and saved into an asset catalog later. |
+| Q13 | Refresh cadence: library refreshes automatically on launch if older than 6 h, and achievements refresh when you open a box if older than 6 h. Right numbers? | Yes. | Lower means fresher numbers but more API calls. The daily limit is 100k, so this is comfortable either way. |
+| Q14 | Should free-to-play games you have played appear in the checklist? | Yes (`include_played_free_games=1`). | Turning it off hides F2P titles from the checklist. |
+| Q15 | Box depth: a chunky collector's box (22% of width) or a slim DVD-case look (~10%)? | Chunky at 22%, so there's room for a readable spine title. | Changing `BoxBuilder.depth` and the spine texture aspect is one constant each. |
+| Q16 | If your own API key can't see your own private game list: is setting Game details to Public acceptable? | Show the fix-it message (see DESIGN §9.1). | Research couldn't test this live without a key. If your own key does bypass privacy, nothing changes. |
+| Q17 | Demo mode: launch with `--demo` or the "Try the Demo Shelf" button. Demo data is never saved. Keep it in release builds? | Keep it. It's a nice first-run experience. | Remove the button and keep only the flag. |
+| Q18 | Minimum macOS 15.0: fine for anyone you'd share with? | Yes, since it's the minimum for RealityView on macOS. | Going lower would mean replacing the 3D box. |
+
+## Implementation notes (Phase A)
+- `SteamIDInput.parse` rejects all-digit strings that are not valid 17-digit SteamID64s (e.g. 16 digits), even though they match the vanity regex; required by the A3 acceptance list.
+- `hasAPIKey` is mirrored in UserDefaults so launch never reads the Keychain (avoids a prompt after every ad-hoc rebuild); the Keychain is read only on Connect/Refresh.
+- Export/Import menu items are deferred to B7; `exportData`/`importDocument` exist on AppModel. Added `AppModel.leaveDemo()` and a `manual:` parameter on `refreshLibrary` (default true).
+- Interim ShelfView also shows a "Try the Demo Shelf" button in the empty state.
