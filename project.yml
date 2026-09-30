@@ -35,6 +35,8 @@ targets:
     platform: macOS
     sources:
       - path: Sources
+      - path: Resources/AppIcon.icns
+        buildPhase: resources
     dependencies:
       - package: Sparkle
     info:
@@ -42,6 +44,7 @@ targets:
       properties:
         CFBundleName: SteamShelf
         CFBundleDisplayName: Steam Shelf
+        CFBundleIconFile: AppIcon
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         SUFeedURL: https://raw.githubusercontent.com/begemotike/steam-shelf/main/appcast.xml
