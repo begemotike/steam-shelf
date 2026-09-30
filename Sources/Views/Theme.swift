@@ -93,7 +93,7 @@ enum Theme {
         static let handleOffset: CGFloat = 20
 
         // Open box
-        static let frontFaceFill: CGFloat = 0.676
+        static let frontFaceFill: CGFloat = 0.628
         static let editorPanelW: CGFloat = 340
 
         // Textures / canvases
@@ -114,5 +114,132 @@ enum Theme {
         static let crossfade = Animation.easeInOut(duration: 0.15)
         static let panel = Animation.spring(response: 0.4, dampingFraction: 0.85)
         static let artFade = Animation.easeIn(duration: 0.25)
+    }
+}
+
+// MARK: - Shared chrome helpers
+
+private struct ShelfScaleKey: EnvironmentKey { static let defaultValue: CGFloat = 1 }
+
+extension EnvironmentValues {
+    /// Points per design unit for the bookcase block.
+    var shelfScale: CGFloat {
+        get { self[ShelfScaleKey.self] }
+        set { self[ShelfScaleKey.self] = newValue }
+    }
+}
+
+extension Theme {
+    static let brassGradient = LinearGradient(
+        stops: [.init(color: Palette.brassLight, location: 0),
+                .init(color: Palette.brass, location: 0.45),
+                .init(color: Palette.brassDark, location: 1)],
+        startPoint: .top, endPoint: .bottom)
+
+    static let gloss = LinearGradient(
+        stops: [.init(color: .white.opacity(0.22), location: 0),
+                .init(color: .white.opacity(0), location: 0.45),
+                .init(color: .white.opacity(0.06), location: 1)],
+        startPoint: .topLeading, endPoint: .bottomTrailing)
+}
+
+/// A wood (or linen) texture tiled over its frame; flat color until the texture is generated.
+struct TiledFill: View {
+    let image: Image?
+    let fallback: Color
+
+    var body: some View {
+        if let image {
+            image.resizable(resizingMode: .tile)
+        } else {
+            fallback
+        }
+    }
+}
+
+/// Brass rounded plate with bevel, used for the nameplate, handle plates and buttons.
+struct BrassPlate: View {
+    var cornerRadius: CGFloat = 4
+    var bevel: CGFloat = 1
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        shape.fill(Theme.brassGradient)
+            .overlay(shape.strokeBorder(
+                LinearGradient(colors: [.white.opacity(0.45), .clear, .black.opacity(0.35)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing),
+                lineWidth: bevel))
+            .overlay(shape.strokeBorder(Theme.Palette.brassDark.opacity(0.6), lineWidth: 0.5))
+    }
+}
+
+/// Engraved text: the same text 1 unit lower in white underneath.
+struct EngravedText: View {
+    let text: String
+    let font: Font
+    var color: Color = Theme.Palette.brassInk
+    var highlight: Color = .white.opacity(0.4)
+    var offset: CGFloat = 1
+
+    var body: some View {
+        ZStack {
+            Text(text).font(font).foregroundStyle(highlight).offset(y: offset)
+            Text(text).font(font).foregroundStyle(color)
+        }
+    }
+}
+
+/// Brass pill button (open-box toolbar, empty state, editor "Done").
+struct BrassPillButtonStyle: ButtonStyle {
+    var height: CGFloat = 30
+    @State private var hovering = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(Theme.Fonts.baskervilleSemiBold(13))
+            .foregroundStyle(Theme.Palette.brassInk)
+            .padding(.horizontal, 14)
+            .frame(height: height)
+            .background(
+                Capsule().fill(Theme.brassGradient)
+                    .scaleEffect(y: configuration.isPressed ? -1 : 1)
+                    .overlay(Capsule().stroke(Theme.Palette.brassDark, lineWidth: 1))
+            )
+            .brightness(hovering ? 0.06 : 0)
+            .shadow(color: .black.opacity(0.5), radius: 4, x: 0, y: 2)
+            .onHover { hovering = $0 }
+            .pointerStyle(.link)
+    }
+}
+
+/// Cream index card with ruled lines and a red margin line (empty state, note card).
+struct LinedPaper: View {
+    var spacing: CGFloat = 26
+    var marginX: CGFloat = 40
+    var firstLine: CGFloat = 40
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
+                Theme.Palette.cream
+                ForEach(0..<max(0, Int((geo.size.height - firstLine) / spacing) + 1), id: \.self) { i in
+                    Color(hex: 0x9CB8D8, alpha: 0.5)
+                        .frame(height: 1)
+                        .offset(y: firstLine + CGFloat(i) * spacing)
+                }
+                Color(hex: 0xD98080).frame(width: 1).offset(x: marginX)
+            }
+        }
+    }
+}
+
+/// Mahogany thumbtack: a 14-pt circle with a radial highlight and a small drop shadow.
+struct Thumbtack: View {
+    var body: some View {
+        Circle()
+            .fill(RadialGradient(colors: [Color(hex: 0xC26A54), Theme.Palette.mahogany, Color(hex: 0x3A160E)],
+                                 center: UnitPoint(x: 0.35, y: 0.3), startRadius: 0, endRadius: 10))
+            .frame(width: 14, height: 14)
+            .shadow(color: .black.opacity(0.5), radius: 2, x: 1, y: 2)
     }
 }

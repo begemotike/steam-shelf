@@ -28,3 +28,14 @@ Each item is built with the **default** shown. Revisit any time; none block v1.
 - `hasAPIKey` is mirrored in UserDefaults so launch never reads the Keychain (avoids a prompt after every ad-hoc rebuild); the Keychain is read only on Connect/Refresh.
 - Export/Import menu items are deferred to B7; `exportData`/`importDocument` exist on AppModel. Added `AppModel.leaveDemo()` and a `manual:` parameter on `refreshLibrary` (default true).
 - Interim ShelfView also shows a "Try the Demo Shelf" button in the empty state.
+
+## Implementation notes (Phase B)
+- RealityKit on macOS 26 honoured the explicit `PerspectiveCamera` (no root-at-z fallback needed) and composites transparently over SwiftUI (no backdrop fallback needed). `SceneEvents.Update` fires reliably (no `TimelineView` fallback). Face rotations from the ARCHITECTURE table were correct as written.
+- Measured: with the camera at z = 0.85 and FOV 30, the rendered front face fills 0.628 of the (square) stage side, not the 0.676 the formula predicts. `Theme.Metrics.frontFaceFill` was set to 0.628 so the flyer and the 3D front match at the cross-fade. The `BoxBuilder.makeBox` front material also carries a clearcoat of 0.6 for the shrink-wrap look.
+- `BoxBuilder` is `@MainActor` (RealityKit entity APIs are main-actor isolated in the macOS 26 SDK). `BoxStageView` takes an extra `backVersion` (drives back-texture swaps) and `onReady` (signals the RealityView finished building so the cross-fade can start).
+- Phase timings in `OpenBoxView` use `Task.sleep` for the fixed durations (0.16 / 0.45 / 0.15 s etc.) instead of animation completion handlers: a completion that never fires (no value change) would leave the overlay stuck; a generation counter cancels stale sequences.
+- `AppModel.close()` still sets `openedAppID = nil` instantly; Escape / Close / backdrop click go through `OpenBoxView.beginClose()` which animates the return and calls `model.close()` at the end. `openedFromFrame` is kept live by the opened tile so resizing while open still lands the box in its slot.
+- Handles are real `Button`s (press style via `ButtonStyle`) so `NSApp.currentEvent.clickCount` works and accessibility exposes them as "Previous/Next page".
+- Slide direction: `go(to:)` stays synchronous (tests rely on it); the `.push` transition reads `slideDirection` in the same transaction. Not verified mid-flight visually (see report).
+- Export/Import are driven by flags on `AppModel` (`isExporting`, `isImporting`, `pendingImport`, `fileAlert`) and presented from `ShelfView` (`fileExporter`, `fileImporter`, confirmation alert). Import validates the file before asking to replace the shelf.
+- Textures for the back label render at 600x900 @2x on the main actor (~tens of ms); placeholder covers are 1200x1800 so a full page of 16 placeholder tiles holds ~140 MB of CGImages (Phase A decision, unchanged).

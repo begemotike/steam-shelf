@@ -45,6 +45,13 @@ enum SlideDirection: Sendable { case forward, backward }
     var openedFromFrame: CGRect = .zero
     var isEditingLabel = false
 
+    // File export / import (presented by ShelfView)
+    var isExporting = false
+    var exportFile: ShelfFile?
+    var isImporting = false
+    var pendingImport: Data?
+    var fileAlert: String?
+
     // Services
     let steam: SteamClient
     let images: ImageCache
@@ -361,6 +368,35 @@ enum SlideDirection: Sendable { case forward, backward }
         try ShelfDocumentCodec.encode(document.forSharing())
     }
 
+    func beginExport() {
+        do {
+            exportFile = ShelfFile(data: try exportData())
+            isExporting = true
+        } catch {
+            fileAlert = "Couldn't prepare the shelf for export."
+        }
+    }
+
+    func beginImport() { isImporting = true }
+
+    /// Validates a chosen file and asks for confirmation before it replaces the shelf.
+    func stageImport(_ data: Data) {
+        do {
+            _ = try ShelfDocumentCodec.decode(data)
+            pendingImport = data
+        } catch DocumentError.unsupportedVersion(let v) {
+            fileAlert = "That shelf was made by a newer version of Steam Shelf (format \(v))."
+        } catch {
+            fileAlert = "That file isn't a Steam Shelf document."
+        }
+    }
+
+    func confirmImport() {
+        guard let data = pendingImport else { return }
+        pendingImport = nil
+        do { try importDocument(data) } catch { fileAlert = "Couldn't import that shelf." }
+    }
+
     func importDocument(_ data: Data) throws {
         document = try ShelfDocumentCodec.decode(data)
         pageIndex = pagination.clamp(pageIndex)
@@ -380,7 +416,7 @@ enum SlideDirection: Sendable { case forward, backward }
         }
     }
 
-    private func blurbIfNeeded(for appID: Int) async {
+    func blurbIfNeeded(for appID: Int) async {
         guard let entry = document.entries.first(where: { $0.appID == appID }) else { return }
         let context = BackOfBoxContext(entry: entry)
         if let existing = entry.blurb, existing.inputFingerprint == context.fingerprint { return }

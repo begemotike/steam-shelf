@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 @main struct SteamShelfApp: App {
     @State private var appModel: AppModel
@@ -44,7 +45,11 @@ struct ShelfCommands: Commands {
         CommandGroup(after: .newItem) {
             Button("Refresh Library") { Task { await model.refreshLibrary() } }
                 .keyboardShortcut("r", modifiers: .command)
-            // Export / Import arrive in B7.
+            Divider()
+            Button("Export Shelf…") { model.beginExport() }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+            Button("Import Shelf…") { model.beginImport() }
+                .keyboardShortcut("i", modifiers: [.command, .shift])
         }
         CommandMenu("Shelf") {
             Button("Next Page") { model.go(to: model.pageIndex + 1) }
@@ -52,5 +57,28 @@ struct ShelfCommands: Commands {
             Button("Previous Page") { model.go(to: model.pageIndex - 1) }
                 .keyboardShortcut(.leftArrow, modifiers: .command)
         }
+    }
+}
+
+extension UTType {
+    static let steamShelf = UTType(exportedAs: "net.outofajam.steamshelf")
+}
+
+/// FileDocument wrapper around the shareable JSON produced by `ShelfDocumentCodec`.
+struct ShelfFile: FileDocument {
+    static let readableContentTypes = [UTType.steamShelf]
+    static let writableContentTypes = [UTType.steamShelf]
+
+    let data: Data
+
+    init(data: Data) { self.data = data }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let contents = configuration.file.regularFileContents else { throw CocoaError(.fileReadCorruptFile) }
+        data = contents
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
     }
 }
