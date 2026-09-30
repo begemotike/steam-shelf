@@ -48,3 +48,11 @@ Each item is built with the **default** shown. Revisit any time; none block v1.
 - `EmptyShelfCard` is now fixed 420x260 (no scale effect); it fits the smallest bay (652x592).
 - Status line "UPDATED n MIN AGO" uses an abbreviated `RelativeDateTimeFormatter` (shows "JUST NOW" under 60 s).
 - Knob and handle press states keep their existing behaviour; the refresh knob's recess does not spin (only the brass disc's parent rotates the whole control, including the recess, which is circular so it is invisible).
+
+## Distribution notes (Sparkle + signing, 2026-09-29)
+- Q10 resolved for Release: `Developer ID Application: Michael Miller (9JHK4XRFW5)`, hardened runtime, timestamped. Debug stays ad-hoc so `make` needs no certificate (and still shows the Keychain prompt after rebuilds).
+- Sparkle 2.10 (SPM) runs inside the App Sandbox using the documented installer XPC service: `SUEnableInstallerLauncherService` plus the `-spks`/`-spki` mach-lookup exceptions. Verified: the Release archive launches sandboxed with Sparkle and no XPC errors.
+- EdDSA key pair generated with Sparkle's `generate_keys`; the private key lives in the login keychain ("Private key for signing Sparkle updates"), the public key is in project.yml (`SUPublicEDKey`). Back up the private key with `generate_keys -x file` if this Mac is ever replaced; losing it orphans every installed copy.
+- Feed: `https://raw.githubusercontent.com/begemotike/steam-shelf/main/appcast.xml`; zips attached to GitHub releases. The repo must be public for the friend's copy to reach the feed and downloads. raw.githubusercontent caches for up to ~5 minutes.
+- Build number = `git rev-list --count HEAD`, so it only rises. Never re-release the same version.
+- Q19: switch the feed to sprucetools.com / Cloudflare instead of GitHub raw? Default: GitHub, zero extra hosting.
