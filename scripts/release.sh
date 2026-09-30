@@ -98,9 +98,10 @@ if [[ -n "$DRY_RUN" ]]; then
 fi
 
 echo "▶ Publishing GitHub release v$VERSION"
-gh release create "v$VERSION" "$OUT/$ZIP" --repo "$REPO" --title "Steam Shelf $VERSION" --generate-notes
 git add appcast.xml
 git commit -m "Release $VERSION (build $BUILD)" -q
 git tag "v$VERSION"
-git push origin main --tags
+git push origin main "v$VERSION"
+# The tag already exists on GitHub now, so the release attaches to it instead of creating its own.
+gh release create "v$VERSION" "$OUT/$ZIP" --repo "$REPO" --title "Steam Shelf $VERSION" --generate-notes
 echo "✔ Released $VERSION. Friends on older builds will be offered it within a day, or via Check for Updates…"
