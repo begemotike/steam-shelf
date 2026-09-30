@@ -57,7 +57,7 @@ echo "▶ Verifying signature"
 codesign --verify --deep --strict --verbose=2 "$APP"
 for bin in "$SPARKLE_FW/Versions/B/Updater.app" "$SPARKLE_FW/Versions/B/Autoupdate" \
            "$SPARKLE_FW/Versions/B/XPCServices/Installer.xpc" "$SPARKLE_FW/Versions/B/XPCServices/Downloader.xpc"; do
-  codesign -dvv "$bin" 2>&1 | grep -q "Authority=Developer ID Application" || { echo "nested binary not Developer ID signed: $bin"; exit 1; }
+  codesign -dvv "$bin" 2>&1 | grep "Authority=Developer ID Application" >/dev/null || { echo "nested binary not Developer ID signed: $bin"; exit 1; }
 done
 codesign -dvv "$APP" 2>&1 | grep -E "Authority=Developer ID Application" >/dev/null || { echo "not signed with Developer ID"; exit 1; }
 
