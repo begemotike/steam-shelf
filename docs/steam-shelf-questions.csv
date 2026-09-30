@@ -1,0 +1,20 @@
+#,Topic,Question,Current default,Your choice,Comments,Options offered
+Q1,Purchase dates,Steam's API doesn't expose purchase dates. How should they be filled in?,Manual date field (current),,,Manual date field (current) | Paste-your-licenses-page importer | Embedded Steam login that scrapes the licenses page | Drop the field entirely
+Q2,Shelf order,Should games be reorderable by dragging?,"Alphabetical, fixed (current)",,,"Alphabetical, fixed (current) | Drag to reorder | Sort menu: name / hours / last played / rating"
+Q3,3D engine,2D SwiftUI shelf + RealityKit only for the opened box. Keep?,Keep (current),,,"Keep (current) | Whole bookcase in 3D (RealityKit) | Whole bookcase in 3D (SceneKit, deprecated)"
+Q4,Persistence,SwiftData stores the shelf as one JSON blob. Keep?,Keep (current),,,Keep (current) | Plain JSON file in Application Support | Per-game SwiftData tables
+Q5,Unticked games,Keep notes and ratings for games you untick?,Keep them (current),,,Keep them (current) | Delete on untick
+Q6,Star rating,Whole stars or half stars?,Whole stars 1–5 (current),,,Whole stars 1–5 (current) | Half stars | Thumbs up / down like Steam | No rating
+Q7,Store details,"Fetch genres, developer, release date from the Steam store?",Not yet (current),,,Not yet (current) | Fetch lazily when a box is opened | Fetch for every shelved game
+Q8,AI blurb provider,"Which AI writes the funny back-of-box blurb, and where does its key live?","Claude via Anthropic API, key in Keychain",,,"Claude via Anthropic API, key in Keychain | OpenAI | Local model (Ollama / Apple Foundation Models) | Decide later"
+Q9,P2P transport,How should friends browse each other's shelves?,Decide later (current),,,Decide later (current) | Cloudflare Worker relay (sprucetools infra) | iCloud / CloudKit sharing | MultipeerConnectivity (same network only) | Just share the exported .steamshelf file
+Q10,Debug signing,"Release is Developer ID. Debug is ad-hoc, which triggers a Keychain prompt after each rebuild.",Leave Debug ad-hoc (current),,,Leave Debug ad-hoc (current) | Sign Debug with Apple Development cert too
+Q11,Shelf title,Steam persona name or custom text?,<Persona>'s Shelf (current),,,"<Persona>'s Shelf (current) | Custom text, editable in Settings | Both: persona default, editable"
+Q12,App icon,Procedural walnut bookcase icon shipped.,Keep (current),,,Keep (current) | Iterate on it (describe in comments) | Commission / AI-generate a painted one
+Q13,Refresh cadence,Library and achievements refresh when older than 6 h.,6 hours (current),,,6 hours (current) | 1 hour | 24 hours | Manual only
+Q14,Free-to-play games,Show played free-to-play titles in the checklist?,Yes (current),,,Yes (current) | No
+Q15,Box depth,Chunky collector's box or slim DVD case?,"Chunky, 22% of width (current)",,,"Chunky, 22% of width (current) | Slim, ~10% | Somewhere between"
+Q16,Private game list,"If your own key can't see your private game list, is setting Game details to Public OK?",Show the fix-it message (current),,,Show the fix-it message (current) | Not acceptable; find another way (comments)
+Q17,Demo mode,Keep the demo shelf in release builds?,Keep (current),,,"Keep (current) | Hide the button, keep --demo flag | Remove entirely"
+Q18,Minimum macOS,macOS 15.0 minimum (needed for RealityView).,macOS 15 (current),,,macOS 15 (current) | macOS 26 only | Lower (means replacing the 3D box)
+Q19,Update feed hosting,Appcast and zips live on public GitHub.,GitHub (current),,,GitHub (current) | sprucetools.com / Cloudflare | Private hosting (comments)
