@@ -3,7 +3,7 @@ import SwiftData
 import AppKit
 import OSLog
 
-enum LaunchMode: Sendable { case normal, demo, tests }
+enum LaunchMode: Sendable { case normal, tests }
 
 enum LoadState: Equatable, Sendable { case idle, loading(String), failed(String) }
 
@@ -62,7 +62,7 @@ enum SlideDirection: Sendable { case forward, backward }
 
     var isDemo: Bool { source.sourceID == "demo" }
 
-    init(mode: LaunchMode, container: ModelContainer) {
+    init(mode: LaunchMode, container: ModelContainer, startDemo: Bool = false) {
         self.mode = mode
         self.container = container
         self.steam = SteamClient()
@@ -86,13 +86,13 @@ enum SlideDirection: Sendable { case forward, backward }
             source = DemoShelfSource()
         }
         document = ShelfDocument.empty(owner: ShelfOwner(steamID64: defaults.string(forKey: DefaultsKey.resolvedSteamID), displayName: "My Shelf", avatarURL: nil))
-        if mode == .demo { startDemo() }
+        if startDemo { self.startDemo() }
     }
 
     // MARK: Lifecycle
 
     func onLaunch() async {
-        guard mode == .normal else { return }
+        guard mode == .normal, !isDemo else { return }
         if let doc = try? source.load() {
             document = doc
         } else {

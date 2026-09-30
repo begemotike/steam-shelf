@@ -7,10 +7,9 @@ import UniformTypeIdentifiers
     let container: ModelContainer
 
     init() {
-        let mode: LaunchMode
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { mode = .tests }
-        else if CommandLine.arguments.contains("--demo") { mode = .demo }
-        else { mode = .normal }
+        let mode: LaunchMode = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ? .tests : .normal
+        // `--demo` is a normal launch that merely starts on the demo shelf; Settings and Leave Demo work as usual.
+        let startDemo = CommandLine.arguments.contains("--demo")
 
         let container: ModelContainer
         do {
@@ -20,7 +19,7 @@ import UniformTypeIdentifiers
             fatalError("Could not create the SwiftData container: \(error)")
         }
         self.container = container
-        _appModel = State(initialValue: AppModel(mode: mode, container: container))
+        _appModel = State(initialValue: AppModel(mode: mode, container: container, startDemo: startDemo))
     }
 
     var body: some Scene {

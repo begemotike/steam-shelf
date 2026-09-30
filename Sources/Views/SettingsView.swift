@@ -77,9 +77,13 @@ struct AccountSection: View {
                 } else {
                     LabeledContent("Web API Key") {
                         HStack {
-                            SecureField("", text: $keyDraft).frame(minWidth: 220)
-                            Button("Save") { model.saveAPIKey(keyDraft); keyDraft = "" }
-                                .disabled(keyDraft.trimmingCharacters(in: .whitespaces).isEmpty || model.mode != .normal)
+                            SecureField("", text: $keyDraft, prompt: Text("32-character key"))
+                                .textFieldStyle(.roundedBorder)
+                                .multilineTextAlignment(.leading)
+                                .frame(minWidth: 260)
+                                .onSubmit { saveKey() }
+                            Button("Save") { saveKey() }
+                                .disabled(!canSaveKey)
                         }
                     }
                 }
@@ -87,10 +91,20 @@ struct AccountSection: View {
                     .font(.footnote)
                 TextField("SteamID or profile URL", text: $model.steamIDInput,
                           prompt: Text("76561198… or https://steamcommunity.com/id/yourname"))
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.leading)
+                    .onSubmit { if canConnect { Task { await model.connect() } } }
                 HStack {
                     Button("Connect") { Task { await model.connect() } }
                         .buttonStyle(.borderedProminent)
-                        .disabled(isBusy || model.isDemo || !model.hasAPIKey || SteamIDInput.parse(model.steamIDInput) == nil)
+                        .disabled(!canConnect)
+                }
+                if model.isDemo {
+                    Text("Leave the demo shelf (above) to connect your own account.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                } else if !model.hasAPIKey {
+                    Text("Save your key first, then enter your profile and press Connect.")
+                        .font(.footnote).foregroundStyle(.secondary)
                     Spacer()
                     StatusRow()
                 }
@@ -104,6 +118,20 @@ struct AccountSection: View {
     private var isBusy: Bool {
         if case .loading = model.libraryState { return true }
         return false
+    }
+
+    private var canSaveKey: Bool {
+        !keyDraft.trimmingCharacters(in: .whitespaces).isEmpty && model.mode == .normal
+    }
+
+    private var canConnect: Bool {
+        !isBusy && !model.isDemo && model.hasAPIKey && SteamIDInput.parse(model.steamIDInput) != nil
+    }
+
+    private func saveKey() {
+        guard canSaveKey else { return }
+        model.saveAPIKey(keyDraft)
+        keyDraft = ""
     }
 }
 
