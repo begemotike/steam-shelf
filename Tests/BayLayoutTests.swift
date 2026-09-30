@@ -14,10 +14,11 @@ final class BayLayoutTests: XCTestCase {
         XCTAssertEqual(l.scale, 1, accuracy: 0.01)
     }
 
-    func testVeryWideBayKeepsAspectAndStretchesGap() {
+    func testVeryWideBayKeepsAspectAndCapsGap() {
         let l = BayLayout(baySize: CGSize(width: 1600, height: 600))
         XCTAssertEqual(l.boxW / l.boxH, 2.0 / 3.0, accuracy: 0.001)
-        XCTAssertGreaterThan(l.gap, 100)
+        XCTAssertEqual(l.gap, l.boxW * BayLayout.gapMaxRatio, accuracy: 0.001)
+        XCTAssertGreaterThan(l.sidePad, 100)
         XCTAssertEqual(l.boxH, 150 / (1 + BayLayout.headroomRatio + BayLayout.plankRatio), accuracy: 0.5)
     }
 

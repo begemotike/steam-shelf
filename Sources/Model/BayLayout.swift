@@ -9,6 +9,8 @@ struct BayLayout: Equatable, Sendable {
     static let headroomRatio: CGFloat = 22.0 / 180.0, plankRatio: CGFloat = 20.0 / 180.0
     /// Preferred side padding (56 at boxH 180); the gap absorbs any width beyond it.
     static let sidePadRatio: CGFloat = 56.0 / 180.0
+    /// The gap never exceeds this fraction of boxW; beyond that the row stays grouped and the side padding grows.
+    static let gapMaxRatio: CGFloat = 0.75
 
     let baySize: CGSize
     let boxW, boxH, gap, sidePad, rowH, plankH, scale: CGFloat
@@ -23,7 +25,8 @@ struct BayLayout: Equatable, Sendable {
         boxH = max(1, min(byHeight, byWidth))
         boxW = boxH * 2 / 3
         let padTarget = max(Self.sidePadMin, boxH * Self.sidePadRatio)
-        gap = max(Self.gapMin, (w - 2 * padTarget - cols * boxW) / (cols - 1))
+        let natural = (w - 2 * padTarget - cols * boxW) / (cols - 1)
+        gap = min(max(Self.gapMin, natural), max(Self.gapMin, boxW * Self.gapMaxRatio))
         sidePad = (w - cols * boxW - (cols - 1) * gap) / 2
         plankH = boxH * Self.plankRatio
         scale = boxH / Theme.Metrics.boxH
