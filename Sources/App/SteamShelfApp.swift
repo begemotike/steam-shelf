@@ -20,6 +20,7 @@ import UniformTypeIdentifiers
         }
         self.container = container
         _appModel = State(initialValue: AppModel(mode: mode, container: container, startDemo: startDemo))
+        if mode == .normal { _ = Updater.shared }   // starts the scheduled update check
     }
 
     var body: some Scene {
@@ -29,7 +30,10 @@ import UniformTypeIdentifiers
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: Theme.Metrics.windowDefaultW, height: Theme.Metrics.windowDefaultH)
         .windowResizability(.contentMinSize)
-        .commands { ShelfCommands(model: appModel) }
+        .commands {
+            UpdateCommands()
+            ShelfCommands(model: appModel)
+        }
 
         Settings {
             SettingsView().environment(appModel)
