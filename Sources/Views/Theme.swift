@@ -37,6 +37,10 @@ enum Theme {
         static let hoverGlow = Color(hex: 0xFFE6A8, alpha: 0.25)
         static let dimOverlay = Color(hex: 0x000000, alpha: 0.70)
         static let stageSpotlight = Color(hex: 0x2A1D14)
+        // Shelf lights: warm LED strip (~2700 K).
+        static let lampCore = Color(hex: 0xFFF1D6)
+        static let lampGlow = Color(hex: 0xFFC46B)
+        static let lampWash = Color(hex: 0xFFB456)
 
         // Raw hex for the texture generator.
         static let walnutHex: UInt32 = 0x5C3A21
@@ -106,6 +110,7 @@ enum Theme {
         static let crossfade = Animation.easeInOut(duration: 0.15)
         static let panel = Animation.spring(response: 0.4, dampingFraction: 0.85)
         static let artFade = Animation.easeIn(duration: 0.25)
+        static let lights = Animation.easeInOut(duration: 0.5)
     }
 }
 

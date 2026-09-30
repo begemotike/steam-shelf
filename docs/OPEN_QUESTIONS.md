@@ -62,3 +62,8 @@ Each item is built with the **default** shown. Revisit any time; none block v1.
 - Direct launch means Steam-dependent features (overlay, achievements, cloud saves) only work if the Steam client happens to be running; games whose code insists on Steam will relaunch themselves through it. Q20: add a per-game or global "always launch through Steam" switch? Default: no switch yet.
 - Install state comes from the Steam client's `libraryfolders.vdf` (`"apps"` blocks cover every library folder, other volumes included). Read-only sandbox exception for `~/Library/Application Support/Steam/steamapps/`. If the file is unreadable the button just says Play and Steam sorts it out.
 - Hidden in demo mode, on non-local (future peer) shelves, and when no Steam client is registered for `steam://`.
+
+## Shelf lights (2026-09-30)
+- Crown knob (bulb), Shelf ▸ Shelf Lights, ⌘L. Persisted in UserDefaults (`shelfLights`), off by default, 0.5 s cross-fade.
+- Per row: `LightStrip` = a tucked-away core line, a short halo, and a warm wash (`lampWash` #FFB456, screen blend) hot under the plank and gone by ~70% of the row, masked so it pools toward the centre and fades before the stiles; under-plank shadow drops to 25%; planks get a warm top spill; covers get a soft warm top light and a bright top edge; a 3.5% ambient warm bounce over the bay.
+- Tuned over three rounds against the two reference photos (amber LED strips). Q21: warmer amber (as now, ~2700 K) or the cooler cream of the second reference? Default: amber.

@@ -16,6 +16,7 @@ enum SlideDirection: Sendable { case forward, backward }
         static let resolvedSteamID = "resolvedSteamID"
         static let hasAPIKey = "hasAPIKey"
         static let playerSummary = "playerSummary"
+        static let shelfLights = "shelfLights"
     }
 
     // Configuration
@@ -44,6 +45,13 @@ enum SlideDirection: Sendable { case forward, backward }
     var openedAppID: Int?
     var openedFromFrame: CGRect = .zero
     var isEditingLabel = false
+
+    /// Warm LED strips under the crown and each plank (DESIGN addendum: shelf lights).
+    var lightsOn: Bool {
+        didSet { if mode == .normal { UserDefaults.standard.set(lightsOn, forKey: DefaultsKey.shelfLights) } }
+    }
+
+    func toggleLights() { withAnimation(Theme.Motion.lights) { lightsOn.toggle() } }
 
     // Local Steam client
     private(set) var installedAppIDs: Set<Int>?          // nil = unknown (no Steam, or unreadable)
@@ -77,6 +85,7 @@ enum SlideDirection: Sendable { case forward, backward }
         self.backOfBox = LocalBackOfBoxProvider()
 
         let defaults = UserDefaults.standard
+        lightsOn = mode == .normal ? defaults.bool(forKey: DefaultsKey.shelfLights) : false
         if mode == .normal {
             steamIDInput = defaults.string(forKey: DefaultsKey.steamIDInput) ?? ""
             resolvedSteamID = defaults.string(forKey: DefaultsKey.resolvedSteamID)

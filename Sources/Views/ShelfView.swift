@@ -144,6 +144,7 @@ struct CrownRail: View {
                         .rotationEffect(.degrees(spin))
                         .disabled(isLoading)
                         .padding(2)
+                    knob(model.lightsOn ? "lightbulb.fill" : "lightbulb", help: model.lightsOn ? "Shelf lights off (⌘L)" : "Shelf lights on (⌘L)") { model.toggleLights() }
                     knob("gearshape.fill", help: "Settings (⌘,)") { openSettings() }
                 }
                 .padding(.trailing, 16)
@@ -337,12 +338,19 @@ private struct BayContent: View {
             // Darken toward the bottom of each bay.
             LinearGradient(colors: [.clear, Theme.Palette.backPanelDark.opacity(0.35)], startPoint: .top, endPoint: .bottom)
 
-            // Shadows cast by the plank/crown above each row.
+            // Shadows cast by the plank/crown above each row (softened when the lights are on).
             ForEach(0..<BayLayout.rows, id: \.self) { r in
                 LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom)
                     .frame(width: size.width, height: 26 * layout.scale)
                     .offset(y: CGFloat(r) * layout.rowH)
+                    .opacity(model.lightsOn ? 0.25 : 1)
             }
+            // Shelf lights: an LED strip under the crown and under each plank, washing the back panel.
+            ForEach(0..<BayLayout.rows, id: \.self) { r in
+                LightStrip(width: size.width, rowHeight: layout.rowH)
+                    .offset(y: CGFloat(r) * layout.rowH)
+            }
+            .opacity(model.lightsOn ? 1 : 0)
             // Side shadows from the stiles.
             HStack(spacing: 0) {
                 LinearGradient(colors: [.black.opacity(0.35), .clear], startPoint: .leading, endPoint: .trailing)
@@ -374,8 +382,56 @@ private struct BayContent: View {
     }
 }
 
+/// One LED strip: a bright core line at the underside of the plank above, a tight halo, and a warm
+/// wash that falls down the back panel and fades out by about 60% of the row.
+struct LightStrip: View {
+    let width: CGFloat
+    let rowHeight: CGFloat
+    @Environment(\.shelfScale) private var s
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            // Wash on the back panel: hot right under the plank, long soft falloff.
+            LinearGradient(stops: [
+                .init(color: Theme.Palette.lampWash.opacity(0.68), location: 0),
+                .init(color: Theme.Palette.lampWash.opacity(0.38), location: 0.08),
+                .init(color: Theme.Palette.lampWash.opacity(0.15), location: 0.24),
+                .init(color: Theme.Palette.lampWash.opacity(0.03), location: 0.50),
+                .init(color: .clear, location: 0.72),
+            ], startPoint: .top, endPoint: .bottom)
+            .frame(width: width, height: rowHeight * 0.9)
+            .blendMode(.screen)
+            // Halo right under the strip.
+            LinearGradient(stops: [
+                .init(color: Theme.Palette.lampGlow.opacity(0.55), location: 0),
+                .init(color: Theme.Palette.lampGlow.opacity(0.18), location: 0.45),
+                .init(color: .clear, location: 1),
+            ], startPoint: .top, endPoint: .bottom)
+            .frame(width: width, height: 26 * s)
+            .blendMode(.plusLighter)
+            // The strip itself, tucked under the plank's lip so mostly its glow shows.
+            Theme.Palette.lampCore.opacity(0.55)
+                .frame(width: max(0, width - 28 * s), height: 1.5 * s)
+                .shadow(color: Theme.Palette.lampCore.opacity(0.7), radius: 2.5 * s)
+                .shadow(color: Theme.Palette.lampGlow.opacity(0.6), radius: 7 * s, y: 2 * s)
+        }
+        // Real strips pool toward the middle and fall off before the stiles.
+        .mask(
+            LinearGradient(stops: [
+                .init(color: .white.opacity(0.35), location: 0),
+                .init(color: .white, location: 0.18),
+                .init(color: .white, location: 0.82),
+                .init(color: .white.opacity(0.35), location: 1),
+            ], startPoint: .leading, endPoint: .trailing)
+        )
+        .frame(width: width, height: rowHeight, alignment: .top)
+        .allowsHitTesting(false)
+    }
+}
+
 struct PlankView: View {
     @Environment(\.shelfScale) private var s
+    @Environment(AppModel.self) private var model
     @State private var textures = TextureLibrary.shared
 
     var body: some View {
@@ -384,6 +440,10 @@ struct PlankView: View {
             LinearGradient(colors: [Theme.Palette.walnutLight, Theme.Palette.walnutDark], startPoint: .top, endPoint: .bottom)
                 .opacity(0.4)
                 .blendMode(.multiply)
+            // Light from the strip above spilling onto the plank's top surface and front edge.
+            LinearGradient(colors: [Theme.Palette.lampGlow.opacity(0.45), Theme.Palette.lampGlow.opacity(0.08)], startPoint: .top, endPoint: .bottom)
+                .blendMode(.screen)
+                .opacity(model.lightsOn ? 1 : 0)
             VStack(spacing: 0) {
                 Theme.Palette.walnutHighlight.opacity(0.8).frame(height: 1)
                 Spacer(minLength: 0)
@@ -391,7 +451,7 @@ struct PlankView: View {
             }
         }
         .compositingGroup()
-        .shadow(color: .black.opacity(0.45), radius: 6 * s, x: 0, y: 4 * s)
+        .shadow(color: .black.opacity(model.lightsOn ? 0.6 : 0.45), radius: 6 * s, x: 0, y: 4 * s)
     }
 }
 
@@ -629,6 +689,7 @@ struct BoxTile: View {
                 .frame(width: M.boxW * s, height: M.boxH * s)
                 .clipShape(RoundedRectangle(cornerRadius: 2 * s))
                 .overlay(gloss)
+                .overlay(litOverlay)
                 .overlay(
                     RoundedRectangle(cornerRadius: 2 * s)
                         .stroke(Theme.Palette.hoverGlow, lineWidth: 1.5 * s)
@@ -640,6 +701,22 @@ struct BoxTile: View {
         .scaleEffect(lifted ? 1.03 : 1)
         .offset(y: lifted ? -3 * s : 0)
         .animation(Theme.Motion.hover, value: lifted)
+    }
+
+    /// Shelf lights on: warm light lands on the top of the cover and fades down; a bright top edge.
+    private var litOverlay: some View {
+        ZStack(alignment: .top) {
+            LinearGradient(stops: [
+                .init(color: Theme.Palette.lampGlow.opacity(0.24), location: 0),
+                .init(color: Theme.Palette.lampGlow.opacity(0.07), location: 0.3),
+                .init(color: .clear, location: 0.55),
+            ], startPoint: .top, endPoint: .bottom)
+            .blendMode(.screen)
+            Theme.Palette.lampCore.opacity(0.75).frame(height: max(1, 1.5 * s))
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 2 * s))
+        .opacity(model.lightsOn ? 1 : 0)
+        .allowsHitTesting(false)
     }
 
     private var cover: some View {

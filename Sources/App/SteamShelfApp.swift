@@ -60,6 +60,8 @@ struct ShelfCommands: Commands {
             Button("Previous Page") { model.go(to: model.pageIndex - 1) }
                 .keyboardShortcut(.leftArrow, modifiers: .command)
             Divider()
+            Button(model.lightsOn ? "Shelf Lights Off" : "Shelf Lights On") { model.toggleLights() }
+                .keyboardShortcut("l", modifiers: .command)
             Button("Arrange Alphabetically") { model.arrangeAlphabetically() }
                 .disabled(!model.isCustomArranged)
         }
