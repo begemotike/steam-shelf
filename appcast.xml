@@ -1,0 +1,15 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>SteamShelf</title>
+        <item>
+            <title>0.1.0</title>
+            <pubDate>Tue, 29 Sep 2026 23:17:53 -0800</pubDate>
+            <link>https://github.com/begemotike/steam-shelf/releases</link>
+            <sparkle:version>10</sparkle:version>
+            <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/begemotike/steam-shelf/releases/download/v0.1.0/SteamShelf-0.1.0.zip" length="2039227" type="application/octet-stream" sparkle:edSignature="pzFAwuUUNpnOGQ69+8sc7X15Bij2lFUWrnjlRgrn+lgJsdVBjL0ZRKGC64tZ52OccDMABQ5uhTcIig4NVikAAQ=="/>
+        </item>
+    </channel>
+</rss>
