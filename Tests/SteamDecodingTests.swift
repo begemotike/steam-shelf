@@ -124,4 +124,33 @@ final class SteamDecodingTests: XCTestCase {
         let id = try await client.resolveSteamID(.steamID64("76561197960287930"), key: "")
         XCTAssertEqual(id, "76561197960287930")
     }
+
+    func testLibraryFoldersInstalledAppIDs() {
+        let vdf = #"""
+        "libraryfolders"
+        {
+        	"0"
+        	{
+        		"path"		"/Users/x/Library/Application Support/Steam"
+        		"label"		""
+        		"apps"
+        		{
+        			"8930"		"4837870324"
+        			"620"		"1068179754"
+        		}
+        	}
+        	"1"
+        	{
+        		"path"		"/Volumes/Games/SteamLibrary"
+        		"apps"
+        		{
+        			"3527290"		"123"
+        		}
+        	}
+        }
+        """#
+        XCTAssertEqual(SteamInstalls.installedAppIDs(vdf: vdf), [8930, 620, 3527290])
+        XCTAssertEqual(SteamInstalls.installedAppIDs(vdf: "\"libraryfolders\"\n{\n}"), [])
+        XCTAssertEqual(SteamInstalls.launchURL(appID: 620)?.absoluteString, "steam://rungameid/620")
+    }
 }

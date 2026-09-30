@@ -84,6 +84,7 @@ struct OpenBoxView: View {
                     .frame(width: stageSide, height: stageSide)
                     .position(stageCenter)
                     .opacity(stageOpacity)
+                    .onTapGesture(count: 2) { if playLabel != nil { launchGame() } }
                     .animation(Theme.Motion.panel, value: model.isEditingLabel)
                     .id(generation)
                 }
@@ -156,8 +157,31 @@ struct OpenBoxView: View {
         }
     }
 
+    private var playLabel: String? {
+        guard model.canLaunchGames, let entry else { return nil }
+        switch model.installState(for: entry.appID) {
+        case .installed, .unknown: return "Play"
+        case .notInstalled: return "Install"
+        }
+    }
+
+    private func launchGame() {
+        guard phase == .presented, let entry else { return }
+        model.launch(entry.appID)
+        beginClose()
+    }
+
     private var toolbar: some View {
         HStack(spacing: 12) {
+            if let playLabel {
+                Button {
+                    launchGame()
+                } label: {
+                    Label(playLabel, systemImage: playLabel == "Play" ? "play.fill" : "arrow.down.circle.fill")
+                }
+                .buttonStyle(BrassPillButtonStyle())
+                .help(playLabel == "Play" ? "Launch in Steam (double-click the box)" : "Not installed — ask Steam to install it")
+            }
             Button("Flip") { motion.flip() }
                 .buttonStyle(BrassPillButtonStyle())
             if model.source.isEditable {
@@ -264,6 +288,7 @@ struct OpenBoxView: View {
         motion.idleEnabled = !reduceMotion
         focused = true
         withAnimation(.easeOut(duration: 0.2)) { toolbarOpacity = 1 }
+        model.refreshInstalls()
         if let id = model.openedAppID {
             await model.refreshStats(for: id)
             await model.blurbIfNeeded(for: id)

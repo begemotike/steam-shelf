@@ -56,3 +56,8 @@ Each item is built with the **default** shown. Revisit any time; none block v1.
 - Feed: `https://raw.githubusercontent.com/begemotike/steam-shelf/main/appcast.xml`; zips attached to GitHub releases. The repo must be public for the friend's copy to reach the feed and downloads. raw.githubusercontent caches for up to ~5 minutes.
 - Build number = `git rev-list --count HEAD`, so it only rises. Never re-release the same version.
 - Q19: switch the feed to sprucetools.com / Cloudflare instead of GitHub raw? Default: GitHub, zero extra hosting.
+
+## Play / Install (2026-09-30)
+- Opened box shows a brass Play button (or Install when Steam owns it but it isn't installed); double-clicking the 3D box does the same. Both hand off via `steam://rungameid/<appid>`; the box drops back to the shelf and the base rail says "Handing <title> to Steam…" for 5 s.
+- Install state comes from the Steam client's `libraryfolders.vdf` (`"apps"` blocks cover every library folder, other volumes included). Read-only sandbox exception for `~/Library/Application Support/Steam/steamapps/`. If the file is unreadable the button just says Play and Steam sorts it out.
+- Hidden in demo mode, on non-local (future peer) shelves, and when no Steam client is registered for `steam://`.

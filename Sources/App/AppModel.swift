@@ -45,6 +45,13 @@ enum SlideDirection: Sendable { case forward, backward }
     var openedFromFrame: CGRect = .zero
     var isEditingLabel = false
 
+    // Local Steam client
+    private(set) var installedAppIDs: Set<Int>?          // nil = unknown (no Steam, or unreadable)
+    private(set) var steamAvailable = false
+    /// Short-lived message for the base rail ("Handing off to Steam…"); cleared automatically.
+    var transientStatus: String?
+    private var transientTask: Task<Void, Never>?
+
     // File export / import (presented by ShelfView)
     var isExporting = false
     var exportFile: ShelfFile?
@@ -298,6 +305,44 @@ enum SlideDirection: Sendable { case forward, backward }
         document.updatedAt = Date()
         pageIndex = pagination.clamp(pageIndex)
         scheduleSave()
+    }
+
+    // MARK: Local Steam client
+
+    enum InstallState { case installed, notInstalled, unknown }
+
+    func installState(for appID: Int) -> InstallState {
+        guard let installed = installedAppIDs else { return .unknown }
+        return installed.contains(appID) ? .installed : .notInstalled
+    }
+
+    /// Cheap (one small file); called when the app comes to the front and when a box opens.
+    func refreshInstalls() {
+        guard mode == .normal else { return }
+        steamAvailable = SteamInstalls.isSteamAvailable
+        installedAppIDs = SteamInstalls.scan()
+        Self.log.info("Steam client available: \(self.steamAvailable, privacy: .public); installed games known: \(self.installedAppIDs?.count ?? -1, privacy: .public)")
+    }
+
+    /// Whether the Play/Install button should show for the opened box.
+    var canLaunchGames: Bool { mode == .normal && !isDemo && steamAvailable && source.sourceID == "local" }
+
+    /// Hands the game to the Steam client (which launches it, or offers to install it).
+    func launch(_ appID: Int) {
+        guard canLaunchGames, let url = SteamInstalls.launchURL(appID: appID) else { return }
+        NSWorkspace.shared.open(url)
+        let title = document.entries.first { $0.appID == appID }?.title ?? "game"
+        showTransient(installState(for: appID) == .notInstalled ? "Asking Steam to install \(title)…" : "Handing \(title) to Steam…")
+    }
+
+    func showTransient(_ message: String, seconds: Double = 5) {
+        transientTask?.cancel()
+        transientStatus = message
+        transientTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            self?.transientStatus = nil
+        }
     }
 
     // MARK: Arrangement

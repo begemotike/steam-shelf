@@ -245,6 +245,9 @@ struct BaseRail: View {
 
     private func statusText(now: Date) -> Text {
         let cream = Theme.Palette.cream.opacity(0.85)
+        if let transient = model.transientStatus {
+            return Text(transient.uppercased()).foregroundStyle(Theme.Palette.brassLight)
+        }
         switch model.libraryState {
         case .loading(let message):
             return Text(message.uppercased()).foregroundStyle(cream)
