@@ -3,6 +3,15 @@
     <channel>
         <title>SteamShelf</title>
         <item>
+            <title>0.2.2</title>
+            <pubDate>Wed, 30 Sep 2026 01:42:28 -0800</pubDate>
+            <link>https://github.com/begemotike/steam-shelf/releases</link>
+            <sparkle:version>21</sparkle:version>
+            <sparkle:shortVersionString>0.2.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/begemotike/steam-shelf/releases/download/v0.2.2/SteamShelf-0.2.2.zip" length="3411763" type="application/octet-stream" sparkle:edSignature="iV03tXEwY1DG1LCrugtWAjVn5qgH+AY/8mzhUHmABG/ySpxiL/G+xIEw1vh5Kte4Nj+PKses7S1yzYYG3qgJDw=="/>
+        </item>
+        <item>
             <title>0.2.1</title>
             <pubDate>Wed, 30 Sep 2026 01:25:40 -0800</pubDate>
             <link>https://github.com/begemotike/steam-shelf/releases</link>
@@ -19,15 +28,6 @@
             <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <enclosure url="https://github.com/begemotike/steam-shelf/releases/download/v0.2.0/SteamShelf-0.2.0.zip" length="3348936" type="application/octet-stream" sparkle:edSignature="CilxuRv2KO6hdGWn1LuUtQncsnQlESiYIDRNJN2XcW7Kk1gYpIP3fyPvKdvzZuMd3hv4SI5CzWS6s0qqRbrkDQ=="/>
-        </item>
-        <item>
-            <title>0.1.0</title>
-            <pubDate>Tue, 29 Sep 2026 23:17:53 -0800</pubDate>
-            <link>https://github.com/begemotike/steam-shelf/releases</link>
-            <sparkle:version>10</sparkle:version>
-            <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/begemotike/steam-shelf/releases/download/v0.1.0/SteamShelf-0.1.0.zip" length="2039227" type="application/octet-stream" sparkle:edSignature="pzFAwuUUNpnOGQ69+8sc7X15Bij2lFUWrnjlRgrn+lgJsdVBjL0ZRKGC64tZ52OccDMABQ5uhTcIig4NVikAAQ=="/>
         </item>
     </channel>
 </rss>
