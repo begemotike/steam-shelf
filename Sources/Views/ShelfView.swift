@@ -12,19 +12,7 @@ struct ShelfView: View {
     var body: some View {
         @Bindable var model = model
         ZStack {
-            BackdropView()
-            VStack(spacing: 0) {
-                HeaderBar()
-                GeometryReader { geo in
-                    let pad = Theme.Metrics.bookcasePadding
-                    let scale = max(0.1, min((geo.size.width - 2 * pad) / Theme.Metrics.bookcaseW,
-                                             (geo.size.height - 2 * pad) / Theme.Metrics.bookcaseH))
-                    BookcaseView()
-                        .environment(\.shelfScale, scale)
-                        .frame(width: Theme.Metrics.bookcaseW * scale, height: Theme.Metrics.bookcaseH * scale)
-                        .position(x: geo.size.width / 2, y: geo.size.height / 2)
-                }
-            }
+            CaseFrameView()
             OpenBoxView()
         }
         .coordinateSpace(.named("shelfSpace"))
@@ -83,74 +71,64 @@ struct ShelfView: View {
     }
 }
 
-// MARK: - Backdrop
+// MARK: - Case frame
 
-private struct BackdropView: View {
+/// The window *is* the bookcase: crown rail, two stiles, base rail and the flexible bay (DESIGN / PHASE_C).
+struct CaseFrameView: View {
     @State private var textures = TextureLibrary.shared
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                TiledFill(image: textures.linen, fallback: Theme.Palette.backdrop)
-                RadialGradient(
-                    colors: [.clear, Theme.Palette.backdropEdge.opacity(0.85)],
-                    center: .center, startRadius: 0,
-                    endRadius: 0.75 * max(geo.size.width, geo.size.height))
+        let M = Theme.Metrics.self
+        VStack(spacing: 0) {
+            CrownRail()
+            HStack(spacing: 0) {
+                StileView(side: .left)
+                BayView()
+                StileView(side: .right)
             }
+            BaseRail()
         }
-        .allowsHitTesting(false)
+        // One continuous wood texture behind every frame member, so there are no seams.
+        .background(TiledFill(image: textures.caseWood, fallback: Theme.Palette.walnutDark))
+        .clipped()
+        .frame(minWidth: M.stileW * 2 + 100)
     }
 }
 
-// MARK: - Header
-
-struct HeaderBar: View {
+struct CrownRail: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openSettings) private var openSettings
-    @State private var textures = TextureLibrary.shared
     @State private var spin = 0.0
 
     private var isLoading: Bool { if case .loading = model.libraryState { true } else { false } }
 
     var body: some View {
-        HStack(spacing: 0) {
-            Color.clear.frame(width: 80)
-            Spacer(minLength: 8)
-            ZStack {
-                BrassPlate(cornerRadius: 6)
-                EngravedText(text: model.document.title, font: Theme.Fonts.copperplateBold(16))
-                    .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 14)
+        let M = Theme.Metrics.self
+        ZStack {
+            // Edges of the rail.
+            VStack(spacing: 0) {
+                Theme.Palette.walnutHighlight.opacity(0.8).frame(height: 1)
+                Spacer(minLength: 0)
+                Color.black.opacity(0.55).frame(height: 2)
+                Color.white.opacity(0.06).frame(height: 1)
             }
-            .frame(width: 280, height: 34)
-            .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 2)
-            Spacer(minLength: 8)
-            Text("Page \(model.pageIndex + 1) of \(model.pagination.pageCount)")
-                .font(Theme.Fonts.baskerville(13).smallCaps())
-                .foregroundStyle(Theme.Palette.cream)
-                .monospacedDigit()
-            HStack(spacing: 8) {
-                roundButton("arrow.clockwise", help: "Refresh Library (⌘R)") {
-                    Task { await model.refreshLibrary() }
+            nameplate
+            HStack(spacing: 0) {
+                Color.clear.frame(width: M.trafficLightClearance)
+                Spacer(minLength: 0)
+                HStack(spacing: 10) {
+                    pagePlate
+                    knob("arrow.clockwise", help: "Refresh Library (⌘R)") { Task { await model.refreshLibrary() } }
+                        .rotationEffect(.degrees(spin))
+                        .disabled(isLoading)
+                        .padding(2)
+                    knob("gearshape.fill", help: "Settings (⌘,)") { openSettings() }
                 }
-                .rotationEffect(.degrees(spin))
-                .disabled(isLoading)
-                roundButton("gearshape.fill", help: "Settings (⌘,)") { openSettings() }
+                .padding(.trailing, 16)
             }
-            .padding(.leading, 14)
-            .padding(.trailing, 16)
+            .padding(.top, 1)
         }
-        .frame(height: Theme.Metrics.headerHeight)
-        .background {
-            ZStack(alignment: .bottom) {
-                TiledFill(image: textures.caseWood, fallback: Theme.Palette.walnutDark)
-                VStack(spacing: 0) {
-                    Theme.Palette.walnutHighlight.opacity(0.4).frame(height: 1)
-                    Color.black.opacity(0.5).frame(height: 2)
-                }
-            }
-            .shadow(color: .black.opacity(0.5), radius: 8, x: 0, y: 3)
-        }
-        .zIndex(1)
+        .frame(height: M.crownH)
         .onChange(of: isLoading) { _, loading in
             if loading {
                 withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) { spin = 360 }
@@ -160,20 +138,60 @@ struct HeaderBar: View {
         }
     }
 
-    private func roundButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+    /// Inlaid brass nameplate: no drop shadow, a dark rim top/left, a light rim bottom/right, two screws.
+    private var nameplate: some View {
+        let shape = RoundedRectangle(cornerRadius: 6, style: .continuous)
+        return ZStack {
+            BrassPlate(cornerRadius: 6)
+            EngravedText(text: model.document.title, font: Theme.Fonts.copperplateBold(16))
+                .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 24)
+            HStack { screw; Spacer(minLength: 0); screw }.padding(.horizontal, 8)
+        }
+        .frame(width: 280, height: 34)
+        .overlay(shape.inset(by: -0.5).stroke(.black.opacity(0.45), lineWidth: 1)
+            .mask(LinearGradient(colors: [.white, .clear], startPoint: .topLeading, endPoint: .center)))
+        .overlay(shape.inset(by: -0.5).stroke(.white.opacity(0.15), lineWidth: 1)
+            .mask(LinearGradient(colors: [.clear, .white], startPoint: .center, endPoint: .bottomTrailing)))
+    }
+
+    private var screw: some View {
+        Circle()
+            .fill(RadialGradient(colors: [Theme.Palette.brassLight, Theme.Palette.brass, Theme.Palette.brassDark],
+                                 center: UnitPoint(x: 0.35, y: 0.3), startRadius: 0, endRadius: 6))
+            .overlay(Circle().stroke(Theme.Palette.brassDark, lineWidth: 0.5))
+            .overlay(Rectangle().fill(Theme.Palette.brassInk.opacity(0.8)).frame(width: 4, height: 0.8).rotationEffect(.degrees(35)))
+            .frame(width: 6, height: 6)
+    }
+
+    private var pagePlate: some View {
+        ZStack {
+            BrassPlate(cornerRadius: 4)
+            EngravedText(text: "PAGE \(model.pageIndex + 1) OF \(model.pagination.pageCount)",
+                         font: Theme.Fonts.copperplate(11).smallCaps().monospacedDigit())
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .frame(width: 92, height: 26)
+    }
+
+    private func knob(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             ZStack {
+                // Dark recess the knob is set into.
+                Circle().fill(.black.opacity(0.35)).frame(width: 34, height: 34)
+                    .overlay(Circle().strokeBorder(.white.opacity(0.18), lineWidth: 1)
+                        .mask(LinearGradient(colors: [.clear, .white], startPoint: .center, endPoint: .bottom)))
                 Circle().fill(Theme.brassGradient)
                     .overlay(Circle().strokeBorder(Theme.Palette.brassDark, lineWidth: 1))
                     .overlay(Circle().strokeBorder(.white.opacity(0.35), lineWidth: 1).padding(1).mask(
                         LinearGradient(colors: [.white, .clear], startPoint: .top, endPoint: .center)))
+                    .frame(width: 30, height: 30)
                 Image(systemName: symbol)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.Palette.brassInk)
                     .shadow(color: .white.opacity(0.4), radius: 0, x: 0, y: 1)
             }
-            .frame(width: 30, height: 30)
-            .shadow(color: .black.opacity(0.5), radius: 3, x: 0, y: 2)
+            .frame(width: 34, height: 34)
+            .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .focusEffectDisabled()
@@ -182,146 +200,150 @@ struct HeaderBar: View {
     }
 }
 
-// MARK: - Bookcase
-
-struct BookcaseView: View {
+struct BaseRail: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.shelfScale) private var s
 
     var body: some View {
-        let M = Theme.Metrics.self
-        HStack(spacing: 0) {
-            handleColumn(.left)
-            CaseView()
-                .frame(width: M.caseW * s, height: M.caseH * s)
-            handleColumn(.right)
+        ZStack(alignment: .top) {
+            VStack(spacing: 0) {
+                Color.black.opacity(0.35).frame(height: 1)
+                LinearGradient(colors: [.black.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 10)
+                Spacer(minLength: 0)
+                Color.black.opacity(0.2).frame(height: Theme.Metrics.plinthH)
+            }
+            HStack {
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    statusText(now: context.date)
+                        .font(Theme.Fonts.baskerville(12))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 12)
+                EngravedText(text: "STEAM SHELF", font: Theme.Fonts.copperplate(11),
+                             color: Theme.Palette.brass.opacity(0.7), highlight: .white.opacity(0.08))
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, Theme.Metrics.plinthH)
+            .frame(maxHeight: .infinity)
         }
-        .frame(width: 932 * s, height: M.caseH * s)
+        .frame(height: Theme.Metrics.baseH)
     }
 
-    private func handleColumn(_ side: HandleSide) -> some View {
+    private func statusText(now: Date) -> Text {
+        let cream = Theme.Palette.cream.opacity(0.85)
+        switch model.libraryState {
+        case .loading(let message):
+            return Text(message.uppercased()).foregroundStyle(cream)
+        case .failed(let message):
+            return Text("⚠ " + message.uppercased()).foregroundStyle(Theme.Palette.brassLight)
+        case .idle:
+            let shelved = model.document.shelvedEntries.count
+            if model.isDemo {
+                let total = model.library?.games.count ?? model.document.entries.count
+                return Text("DEMO SHELF · \(shelved) OF \(total) TITLES SHELVED").foregroundStyle(cream)
+            }
+            if let library = model.library {
+                return Text("UPDATED \(Self.relative(library.fetchedAt, now: now)) · \(shelved) OF \(library.games.count) TITLES SHELVED")
+                    .foregroundStyle(cream)
+            }
+            return Text("NOT CONNECTED — OPEN SETTINGS (⌘,)").foregroundStyle(cream)
+        }
+    }
+
+    private static func relative(_ date: Date, now: Date) -> String {
+        if now.timeIntervalSince(date) < 60 { return "JUST NOW" }
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f.localizedString(for: date, relativeTo: now).uppercased()
+    }
+}
+
+struct StileView: View {
+    let side: HandleSide
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
         let M = Theme.Metrics.self
         let page = model.pageIndex
         let label = side == .left ? model.pagination.leftHandleLabel(currentPage: page)
                                   : model.pagination.rightHandleLabel(currentPage: page)
-        return HandleView(side: side, label: label) { model.handleTapped(side) }
-            .frame(width: M.handleColumnW * s, height: M.caseH * s,
-                   alignment: side == .left ? .trailing : .leading)
-            .padding(side == .left ? .trailing : .leading, M.handleOffset * s)
-            .frame(width: M.handleColumnW * s, height: M.caseH * s, alignment: side == .left ? .trailing : .leading)
+        ZStack {
+            // Lit from the left.
+            LinearGradient(colors: [.white.opacity(0.07), .clear, .black.opacity(0.22)],
+                           startPoint: .leading, endPoint: .trailing)
+            // Mortise the handle is set into.
+            let mortise = RoundedRectangle(cornerRadius: 8, style: .continuous)
+            mortise.fill(.black.opacity(0.4))
+                .overlay(mortise.stroke(.black.opacity(0.6), lineWidth: 2)
+                    .mask(LinearGradient(colors: [.white, .clear], startPoint: .topLeading, endPoint: .bottomTrailing)))
+                .clipShape(mortise)
+                .frame(width: M.mortiseW, height: M.mortiseH)
+            HandleView(side: side, label: label) { model.handleTapped(side) }
+        }
+        .frame(width: M.stileW)
+        .frame(maxHeight: .infinity)
     }
 }
 
-/// The case frame: crown, stiles, base and the bay (back panel, shadows, planks, page).
-struct CaseView: View {
-    @Environment(\.shelfScale) private var s
-    @State private var textures = TextureLibrary.shared
+// MARK: - Bay
 
-    var body: some View {
-        let M = Theme.Metrics.self
-        ZStack(alignment: .topLeading) {
-            TiledFill(image: textures.caseWood, fallback: Theme.Palette.walnutDark)
-
-            // Stile shading (lit from the left).
-            HStack(spacing: 0) {
-                stile
-                Spacer(minLength: 0)
-                stile
-            }
-            .frame(height: 4 * M.rowH * s)
-            .offset(y: M.crownH * s)
-
-            BayView()
-                .frame(width: M.bayW * s, height: 4 * M.rowH * s)
-                .offset(x: M.stileW * s, y: M.crownH * s)
-
-            crown
-            base
-        }
-        .frame(width: M.caseW * s, height: M.caseH * s)
-        .clipped()
-        .shadow(color: .black.opacity(0.6), radius: 24 * s, x: 6 * s, y: 10 * s)
-    }
-
-    private var stile: some View {
-        LinearGradient(colors: [.white.opacity(0.07), .clear, .black.opacity(0.22)],
-                       startPoint: .leading, endPoint: .trailing)
-            .frame(width: Theme.Metrics.stileW * s)
-    }
-
-    private var crown: some View {
-        let M = Theme.Metrics.self
-        return ZStack(alignment: .topLeading) {
-            LinearGradient(colors: [Theme.Palette.walnutHighlight.opacity(0.3), .clear],
-                           startPoint: .top, endPoint: .bottom)
-                .frame(height: 8 * s)
-            Color.black.opacity(0.55).frame(height: 2 * s).offset(y: (M.crownH - 12 - 2) * s)
-            Color.white.opacity(0.06).frame(height: 1 * s).offset(y: (M.crownH - 12) * s)
-            Theme.Palette.walnutHighlight.opacity(0.8).frame(height: 1 * s)
-        }
-        .frame(width: M.caseW * s, height: M.crownH * s, alignment: .topLeading)
-        .background(alignment: .bottom) { Color.black.opacity(0.0) }
-    }
-
-    private var base: some View {
-        let M = Theme.Metrics.self
-        return ZStack(alignment: .bottom) {
-            LinearGradient(colors: [.black.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom)
-                .frame(height: 10 * s).frame(maxHeight: .infinity, alignment: .top)
-            Color.black.opacity(0.2).frame(height: M.plinthH * s)
-            Color.black.opacity(0.35).frame(height: 1 * s).frame(maxHeight: .infinity, alignment: .bottom).offset(y: -M.plinthH * s)
-        }
-        .frame(width: M.caseW * s, height: M.baseH * s)
-        .offset(y: (M.caseH - M.baseH) * s)
-    }
-}
-
-/// Bay interior: back panel, shadows, planks and the current page.
+/// Bay interior: back panel, shadows, planks and the current page, positioned from a `BayLayout`.
 struct BayView: View {
+    var body: some View {
+        GeometryReader { geo in
+            let layout = BayLayout(baySize: geo.size)
+            BayContent(layout: layout)
+                .environment(\.shelfScale, layout.scale)
+        }
+    }
+}
+
+private struct BayContent: View {
+    let layout: BayLayout
     @Environment(AppModel.self) private var model
-    @Environment(\.shelfScale) private var s
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var textures = TextureLibrary.shared
 
     var body: some View {
-        let M = Theme.Metrics.self
+        let size = layout.baySize
         ZStack(alignment: .topLeading) {
             TiledFill(image: textures.backPanel, fallback: Theme.Palette.backPanel)
             // Darken toward the bottom of each bay.
             LinearGradient(colors: [.clear, Theme.Palette.backPanelDark.opacity(0.35)], startPoint: .top, endPoint: .bottom)
 
             // Shadows cast by the plank/crown above each row.
-            ForEach(0..<4, id: \.self) { r in
+            ForEach(0..<BayLayout.rows, id: \.self) { r in
                 LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom)
-                    .frame(width: M.bayW * s, height: 26 * s)
-                    .offset(y: CGFloat(r) * M.rowH * s)
+                    .frame(width: size.width, height: 26 * layout.scale)
+                    .offset(y: CGFloat(r) * layout.rowH)
             }
             // Side shadows from the stiles.
             HStack(spacing: 0) {
                 LinearGradient(colors: [.black.opacity(0.35), .clear], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: 14 * s)
+                    .frame(width: 14)
                 Spacer(minLength: 0)
                 LinearGradient(colors: [.black.opacity(0.35), .clear], startPoint: .trailing, endPoint: .leading)
-                    .frame(width: 14 * s)
+                    .frame(width: 14)
             }
 
             // Planks (frame layer: they do not slide with the page).
-            ForEach(0..<4, id: \.self) { r in
+            ForEach(0..<BayLayout.rows, id: \.self) { r in
+                let f = layout.plankFrame(row: r)
                 PlankView()
-                    .frame(width: M.bayW * s, height: M.plankFaceH * s)
-                    .offset(y: (CGFloat(r) * M.rowH + M.rowHeadroom + M.boxH) * s)
+                    .frame(width: f.width, height: f.height)
+                    .offset(x: f.minX, y: f.minY)
             }
 
-            PageContainerView()
-                .frame(width: M.bayW * s, height: 4 * M.rowH * s)
+            PageContainerView(layout: layout)
+                .frame(width: size.width, height: size.height)
                 .clipped()
 
             if model.document.shelvedEntries.isEmpty {
                 EmptyShelfCard()
-                    .frame(width: M.bayW * s, height: 4 * M.rowH * s)
+                    .frame(width: size.width, height: size.height)
             }
         }
-        .frame(width: M.bayW * s, height: 4 * M.rowH * s)
+        .frame(width: size.width, height: size.height)
         .clipped()
     }
 }
@@ -337,9 +359,9 @@ struct PlankView: View {
                 .opacity(0.4)
                 .blendMode(.multiply)
             VStack(spacing: 0) {
-                Theme.Palette.walnutHighlight.opacity(0.8).frame(height: 1 * s)
+                Theme.Palette.walnutHighlight.opacity(0.8).frame(height: 1)
                 Spacer(minLength: 0)
-                Color.black.opacity(0.4).frame(height: 2 * s)
+                Color.black.opacity(0.4).frame(height: 2)
             }
         }
         .compositingGroup()
@@ -350,13 +372,14 @@ struct PlankView: View {
 // MARK: - Page
 
 struct PageContainerView: View {
+    let layout: BayLayout
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let edge: Edge = model.slideDirection == .forward ? .trailing : .leading
         ZStack {
-            ShelfPageView(pageIndex: model.pageIndex)
+            ShelfPageView(pageIndex: model.pageIndex, layout: layout)
                 .id(model.pageIndex)
                 .transition(reduceMotion ? .opacity : .push(from: edge))
         }
@@ -366,30 +389,30 @@ struct PageContainerView: View {
 /// 4x4 grid of boxes for one page, plus their contact shadows (the planks live in the frame layer).
 struct ShelfPageView: View {
     let pageIndex: Int
+    let layout: BayLayout
     @Environment(AppModel.self) private var model
-    @Environment(\.shelfScale) private var s
 
     var body: some View {
-        let M = Theme.Metrics.self
+        let s = layout.scale
         let entries = model.document.shelvedEntries
         let range = model.pagination.range(ofPage: pageIndex)
         let pageEntries = range.upperBound <= entries.count ? Array(entries[range]) : []
         ZStack(alignment: .topLeading) {
             ForEach(Array(pageEntries.enumerated()), id: \.element.appID) { index, entry in
-                let row = index / Pagination.columns, col = index % Pagination.columns
-                let x = (56 + CGFloat(col) * (M.boxW + M.boxGap)) * s
-                let y = (CGFloat(row) * M.rowH + M.rowHeadroom) * s
+                let f = layout.boxFrame(row: index / Pagination.columns, col: index % Pagination.columns)
                 Ellipse()
                     .fill(Color.black.opacity(0.45))
-                    .frame(width: M.boxW * 0.9 * s, height: 8 * s)
+                    .frame(width: f.width * 0.9, height: 8 * s)
                     .blur(radius: 4 * s)
-                    .offset(x: x + M.boxW * 0.05 * s, y: y + (M.boxH + 2 - 4) * s)
+                    .offset(x: f.minX + f.width * 0.05, y: f.maxY - 2 * s - 4 * s)
                 BoxTile(entry: entry)
-                    .frame(width: M.boxW * s, height: M.boxH * s)
-                    .offset(x: x, y: y)
+                    .frame(width: f.width, height: f.height)
+                    .offset(x: f.minX, y: f.minY)
             }
         }
-        .frame(width: M.bayW * s, height: 4 * M.rowH * s, alignment: .topLeading)
+        .frame(width: layout.baySize.width, height: layout.baySize.height, alignment: .topLeading)
+        // Window resizes must never animate tile positions (page push uses its own transition).
+        .animation(nil, value: layout)
     }
 }
 
@@ -596,7 +619,6 @@ struct BoxTile: View {
 struct EmptyShelfCard: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openSettings) private var openSettings
-    @Environment(\.shelfScale) private var s
 
     private var ownedCount: Int? {
         if let count = model.library?.games.count, count > 0 { count } else { nil }
@@ -632,7 +654,6 @@ struct EmptyShelfCard: View {
         }
         .frame(width: 420, height: 260)
         .rotationEffect(.degrees(-2))
-        .scaleEffect(s)
         .accessibilityElement(children: .contain)
     }
 

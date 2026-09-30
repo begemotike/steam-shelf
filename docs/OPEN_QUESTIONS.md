@@ -39,3 +39,12 @@ Each item is built with the **default** shown. Revisit any time; none block v1.
 - Slide direction: `go(to:)` stays synchronous (tests rely on it); the `.push` transition reads `slideDirection` in the same transaction. Not verified mid-flight visually (see report).
 - Export/Import are driven by flags on `AppModel` (`isExporting`, `isImporting`, `pendingImport`, `fileAlert`) and presented from `ShelfView` (`fileExporter`, `fileImporter`, confirmation alert). Import validates the file before asking to replace the shelf.
 - Textures for the back label render at 600x900 @2x on the main actor (~tens of ms); placeholder covers are 1200x1800 so a full page of 16 placeholder tiles holds ~140 MB of CGImages (Phase A decision, unchanged).
+
+## Implementation notes (Phase C)
+- `BayLayout` gap/side padding: PHASE_C's literal formula gives gap 54.7 / sidePad 28 for the 700x888 design bay, contradicting its own test (gap 36, boxH 180). Implemented as: preferred sidePad = max(28, boxH*56/180); gap = max(14, remaining width / 3) so the design bay reproduces 56/36 and wider bays stretch the gap (sidePad stays put).
+- `BayLayout.slot(containing:)` matches box frames only (not the gaps between them); it is not yet used by the UI.
+- Bay rect for the open-box overlay is derived from the window size and the frame metrics (no plumbing from BayView).
+- With the editor open at the minimum window (820x700) the stage is only ~252 pt square (bay width minus 400); accepted per the §C.6 formula.
+- `EmptyShelfCard` is now fixed 420x260 (no scale effect); it fits the smallest bay (652x592).
+- Status line "UPDATED n MIN AGO" uses an abbreviated `RelativeDateTimeFormatter` (shows "JUST NOW" under 60 s).
+- Knob and handle press states keep their existing behaviour; the refresh knob's recess does not spin (only the brass disc's parent rotates the whole control, including the recess, which is circular so it is invisible).

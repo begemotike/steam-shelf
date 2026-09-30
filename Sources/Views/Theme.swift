@@ -64,33 +64,25 @@ enum Theme {
         static let windowDefaultH: CGFloat = 960
         static let windowMinW: CGFloat = 820
         static let windowMinH: CGFloat = 700
-        static let headerHeight: CGFloat = 56
-        static let bookcasePadding: CGFloat = 24
 
-        // Bookcase design units
-        static let bookcaseW: CGFloat = 1100
-        static let bookcaseH: CGFloat = 1000
-        static let crownH: CGFloat = 40
-        static let baseH: CGFloat = 48
+        // Case frame (points; the bay flexes with the window, see BayLayout)
+        static let crownH: CGFloat = 64
+        static let baseH: CGFloat = 44
+        static let stileW: CGFloat = 84
         static let plinthH: CGFloat = 6
-        static let stileW: CGFloat = 36
-        static let bayW: CGFloat = 700
-        static let handleColumnW: CGFloat = 80
-        static let rowH: CGFloat = 222
-        static let rowHeadroom: CGFloat = 22
-        static let plankFaceH: CGFloat = 20
+        static let trafficLightClearance: CGFloat = 84
+
+        // Box design units (1 unit = 1 pt at BayLayout.scale == 1)
         static let boxW: CGFloat = 120
         static let boxH: CGFloat = 180
-        static let boxGap: CGFloat = 36
         static let spineSliverW: CGFloat = 8
         static let topSliverH: CGFloat = 4
-        static let caseW: CGFloat = 36 + 700 + 36
-        static let caseH: CGFloat = 40 + 888 + 48
 
         // Handles
         static let handleBodyW: CGFloat = 46
         static let handleBodyH: CGFloat = 150
-        static let handleOffset: CGFloat = 20
+        static let mortiseW: CGFloat = 54
+        static let mortiseH: CGFloat = 160
 
         // Open box
         static let frontFaceFill: CGFloat = 0.628
@@ -122,7 +114,7 @@ enum Theme {
 private struct ShelfScaleKey: EnvironmentKey { static let defaultValue: CGFloat = 1 }
 
 extension EnvironmentValues {
-    /// Points per design unit for the bookcase block.
+    /// Points per design unit (BayLayout.scale = boxH / 180) inside the bay.
     var shelfScale: CGFloat {
         get { self[ShelfScaleKey.self] }
         set { self[ShelfScaleKey.self] = newValue }

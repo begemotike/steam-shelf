@@ -26,6 +26,7 @@ steam-shelf/
     Model/
       ShelfDocument.swift
       Pagination.swift
+      BayLayout.swift            // Phase C: pure bay geometry (boxes, planks, scale)
       SteamIDInput.swift
     Steam/
       SteamModels.swift
@@ -54,10 +55,11 @@ steam-shelf/
     SteamDecodingTests.swift
     ShelfDocumentTests.swift
     PaginationTests.swift
+    BayLayoutTests.swift
     CoverURLTests.swift
   docs/ …
 ```
-26 Swift files (22 app + 4 test). Do not add more files unless a file exceeds ~500 lines.
+28 Swift files (23 app + 5 test). Do not add more files unless a file exceeds ~500 lines.
 
 ## 2. File responsibilities and key signatures
 
@@ -496,10 +498,11 @@ All colors, fonts, metrics, and animation constants from DESIGN.md as `static le
 
 ### Views/ShelfView.swift
 ```swift
-struct ShelfView: View                 // root of main window: backdrop + header + bookcase + OpenBoxView overlay
-struct HeaderBar: View                 // brass nameplate, page "2 of 5", refresh + settings buttons
-struct BookcaseView: View              // frame (crown, stiles, base), bays, planks; hosts ShelfPageView + handles
-struct ShelfPageView: View             // 4×4 grid of BoxTile for one page; `.id(pageIndex)` + push transition
+struct ShelfView: View                 // root: CaseFrameView + OpenBoxView overlay (HeaderBar/BookcaseView/BackdropView removed in Phase C)
+struct CaseFrameView: View             // VStack(CrownRail, HStack(StileView, BayView, StileView), BaseRail) over one wood texture
+struct CrownRail / BaseRail / StileView // nameplate, page plate, knobs; status + maker's mark; inlaid page handles
+struct BayView: View                   // GeometryReader -> BayLayout -> back panel, planks, PageContainerView, empty card
+struct ShelfPageView: View             // 4×4 grid positioned by BayLayout.boxFrame; `.id(pageIndex)` + push transition
 struct BoxTile: View                   // one boxed cover on the shelf; hover/press; reports frame in "shelfSpace"
 struct EmptyShelfCard: View            // pinned index card empty state
 @MainActor @Observable final class CoverLoader  // per-tile: state .loading/.ready(CGImage, spine: Color); calls ImageCache + ArtGenerator

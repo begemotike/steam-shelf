@@ -66,6 +66,8 @@ All use `SplitMix64(seed:)` so output is deterministic. Generate at 1024×1024 p
 
 ## 4. Window & bookcase geometry (`Theme.Metrics`)
 
+> **Superseded by Phase C** — see `docs/PHASE_C.md` (window is the bookcase; fixtures live in the crown, stiles and base rail).
+
 Window: default 1180 × 960 pt, min 820 × 700 pt, `.hiddenTitleBar` (traffic lights float over the header).
 
 Vertical stack: `HeaderBar` (fixed 56 pt, not scaled) → bookcase block (fills rest, scaled, centered, 24 pt padding).
@@ -105,6 +107,8 @@ Bookcase block design size **1100 × 1000 du**:
 `ArtGenerator.averageColor` (draw cover into a 1×1 px RGBA context, read the pixel) → convert to HSB → `saturation × 0.8`, `brightness × 0.45` clamped to [0.10, 0.35] → `Color`. Placeholder covers use their palette's dark color.
 
 ## 6. Handles (`HandleView`)
+
+> **Superseded by Phase C** — see `docs/PHASE_C.md` (window is the bookcase; fixtures live in the crown, stiles and base rail).
 
 Anatomy (design units, centered vertically on the case, 20 du outside the stile):
 - **Body:** vertical capsule 46 × 150 du, `walnutLight` filled with `plank` wood texture, overlay `LinearGradient` left→right `white @ 18% → clear @ 0.4 → black @ 35%` for roundness (mirror for the right-hand handle so the highlight is always on the light's side — left side lit on both). Drop shadow `black @ 55%`, radius 6 du, x +3, y +5.
@@ -223,6 +227,8 @@ Standard macOS look (this is the "control room", not the den) with two light tou
 | decoding / steam(msg) | "Steam sent something unexpected. (msg)" |
 
 ## 10. Header bar (`HeaderBar`, 56 pt)
+
+> **Superseded by Phase C** — see `docs/PHASE_C.md` (window is the bookcase; fixtures live in the crown, stiles and base rail).
 
 `case` wood texture with a bottom 2-pt `black @ 50%` line and a 1-pt `walnutHighlight @ 40%` line above it. Leading 80 pt left clear for traffic lights. Center: brass nameplate (rounded rect 280 × 34, brass gradient, bevel as §6) with `document.title` engraved in Copperplate Bold 16 pt. Trailing: "Page 2 of 5" (cream Baskerville 13 pt small caps), then two 30-pt round brass buttons with engraved SF Symbols (`arrow.clockwise`, `gearshape.fill`) in `brassInk`. Gear → `@Environment(\.openSettings)`. Refresh → `refreshLibrary()` (spins while loading).
 

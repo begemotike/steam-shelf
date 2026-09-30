@@ -43,10 +43,22 @@ struct OpenBoxView: View {
 
     // MARK: Geometry
 
-    private var stageSide: CGFloat { max(160, min(overlaySize.width - 360, overlaySize.height - 120)) }
+    /// The bay rect in overlay space: the window minus crown, base and stiles (PHASE_C §C.6).
+    private var bayRect: CGRect {
+        let M = Theme.Metrics.self
+        return CGRect(x: M.stileW, y: M.crownH,
+                      width: max(1, overlaySize.width - 2 * M.stileW),
+                      height: max(1, overlaySize.height - M.crownH - M.baseH))
+    }
+    private var stageSide: CGFloat {
+        let bay = bayRect
+        let reserved = model.isEditingLabel ? Theme.Metrics.editorPanelW + 60 : 80
+        return max(160, min(bay.width - reserved, bay.height - 100))
+    }
     private var stageCenter: CGPoint {
-        let reserved = model.isEditingLabel ? Theme.Metrics.editorPanelW + 40 : 0
-        return CGPoint(x: (overlaySize.width - reserved) / 2, y: overlaySize.height / 2)
+        let bay = bayRect
+        let reserved = model.isEditingLabel ? Theme.Metrics.editorPanelW + 60 : 0
+        return CGPoint(x: bay.minX + (bay.width - reserved) / 2, y: bay.midY)
     }
     private var targetRect: CGRect {
         let h = Theme.Metrics.frontFaceFill * stageSide
@@ -86,14 +98,9 @@ struct OpenBoxView: View {
                     .animation(Theme.Motion.panel, value: model.isEditingLabel)
 
                 if model.isEditingLabel, phase == .presented, let entry {
-                    HStack {
-                        Spacer()
-                        LabelEditorPanel(appID: entry.appID)
-                            .frame(width: Theme.Metrics.editorPanelW)
-                            .frame(maxHeight: .infinity)
-                            .padding(.vertical, 20)
-                            .padding(.trailing, 20)
-                    }
+                    LabelEditorPanel(appID: entry.appID)
+                        .frame(width: Theme.Metrics.editorPanelW, height: max(120, bayRect.height - 32))
+                        .position(x: bayRect.maxX - 16 - Theme.Metrics.editorPanelW / 2, y: bayRect.midY)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
