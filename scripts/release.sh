@@ -44,7 +44,7 @@ APP="$OUT/$APP_NAME.xcarchive/Products/Applications/$APP_NAME.app"
 
 echo "▶ Verifying signature"
 codesign --verify --deep --strict --verbose=2 "$APP"
-codesign -dv "$APP" 2>&1 | grep -E "Authority=Developer ID Application" >/dev/null || { echo "not signed with Developer ID"; exit 1; }
+codesign -dvv "$APP" 2>&1 | grep -E "Authority=Developer ID Application" >/dev/null || { echo "not signed with Developer ID"; exit 1; }
 
 echo "▶ Zipping"
 ditto -c -k --keepParent "$APP" "$OUT/$ZIP"
