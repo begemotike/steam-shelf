@@ -57,6 +57,9 @@ targets:
         LSMinimumSystemVersion: "15.0"
         NSHumanReadableCopyright: "© 2026 Out of a Jam"
         UTExportedTypeDeclarations:
+          - UTTypeIdentifier: net.outofajam.steamshelf.box
+            UTTypeDescription: Steam Shelf Box Drag
+            UTTypeConformsTo: [public.data]
           - UTTypeIdentifier: net.outofajam.steamshelf
             UTTypeDescription: Steam Shelf Document
             UTTypeConformsTo: [public.json, public.data]

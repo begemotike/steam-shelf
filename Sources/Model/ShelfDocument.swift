@@ -9,8 +9,33 @@ struct ShelfDocument: Codable, Sendable, Equatable {
     var createdAt: Date
     var updatedAt: Date
     var entries: [ShelfEntry]
+    /// Alphabetical until the owner drags a box; then the stored order is the arrangement.
+    var arrangement: Arrangement = .alphabetical
+
+    enum Arrangement: String, Codable, Sendable { case alphabetical, custom }
 
     var shelvedEntries: [ShelfEntry] { entries.filter(\.isShelved) }
+
+    private enum CodingKeys: String, CodingKey { case version, id, title, owner, createdAt, updatedAt, entries, arrangement }
+
+    init(id: UUID, title: String, owner: ShelfOwner, createdAt: Date, updatedAt: Date, entries: [ShelfEntry],
+         arrangement: Arrangement = .alphabetical) {
+        self.id = id; self.title = title; self.owner = owner
+        self.createdAt = createdAt; self.updatedAt = updatedAt; self.entries = entries; self.arrangement = arrangement
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decodeIfPresent(Int.self, forKey: .version) ?? ShelfDocument.currentVersion
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        owner = try c.decode(ShelfOwner.self, forKey: .owner)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+        entries = try c.decode([ShelfEntry].self, forKey: .entries)
+        // Older documents have no `arrangement`; they were always alphabetical.
+        arrangement = try c.decodeIfPresent(Arrangement.self, forKey: .arrangement) ?? .alphabetical
+    }
 
     func forSharing() -> ShelfDocument {
         var copy = self
@@ -31,12 +56,40 @@ struct ShelfDocument: Codable, Sendable, Equatable {
         )
     }
 
-    /// v1 ordering: title, case-insensitive, `localizedStandardCompare`.
+    /// Alphabetical ordering: title, case-insensitive, `localizedStandardCompare`.
     mutating func insertSorted(_ entry: ShelfEntry) {
         let index = entries.firstIndex { existing in
             entry.title.localizedStandardCompare(existing.title) == .orderedAscending
         } ?? entries.count
         entries.insert(entry, at: index)
+    }
+
+    /// Inserts according to the current arrangement: sorted, or at the end of a custom shelf.
+    mutating func insert(_ entry: ShelfEntry) {
+        switch arrangement {
+        case .alphabetical: insertSorted(entry)
+        case .custom: entries.append(entry)
+        }
+    }
+
+    /// Moves `appID` so it sits immediately before `targetAppID` (or at the end when nil).
+    /// Any move makes the arrangement custom. Returns false when nothing changed.
+    @discardableResult
+    mutating func move(appID: Int, before targetAppID: Int?) -> Bool {
+        guard appID != targetAppID, let from = entries.firstIndex(where: { $0.appID == appID }) else { return false }
+        let moving = entries.remove(at: from)
+        let to: Int
+        if let targetAppID, let t = entries.firstIndex(where: { $0.appID == targetAppID }) { to = t }
+        else { to = entries.count }
+        entries.insert(moving, at: to)
+        arrangement = .custom
+        return true
+    }
+
+    /// Re-sorts every entry by title and returns to the alphabetical arrangement.
+    mutating func arrangeAlphabetically() {
+        entries.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        arrangement = .alphabetical
     }
 }
 

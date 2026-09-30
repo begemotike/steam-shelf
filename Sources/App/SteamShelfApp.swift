@@ -59,6 +59,9 @@ struct ShelfCommands: Commands {
                 .keyboardShortcut(.rightArrow, modifiers: .command)
             Button("Previous Page") { model.go(to: model.pageIndex - 1) }
                 .keyboardShortcut(.leftArrow, modifiers: .command)
+            Divider()
+            Button("Arrange Alphabetically") { model.arrangeAlphabetically() }
+                .disabled(!model.isCustomArranged)
         }
     }
 }

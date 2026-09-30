@@ -56,6 +56,38 @@ final class ShelfDocumentTests: XCTestCase {
         XCTAssertEqual(doc.forSharing().entries.map(\.appID), [620])
     }
 
+    func testMoveMakesArrangementCustomAndInsertAppends() {
+        var doc = Self.document()
+        doc.entries = [Self.entry(1, "Alpha"), Self.entry(2, "Beta"), Self.entry(3, "Gamma")]
+        XCTAssertEqual(doc.arrangement, .alphabetical)
+        XCTAssertTrue(doc.move(appID: 3, before: 1))
+        XCTAssertEqual(doc.entries.map(\.appID), [3, 1, 2])
+        XCTAssertEqual(doc.arrangement, .custom)
+        XCTAssertTrue(doc.move(appID: 3, before: nil))
+        XCTAssertEqual(doc.entries.map(\.appID), [1, 2, 3])
+        XCTAssertFalse(doc.move(appID: 2, before: 2))
+        XCTAssertFalse(doc.move(appID: 99, before: 1))
+        doc.insert(Self.entry(4, "Aardvark"))            // custom: appended, not sorted
+        XCTAssertEqual(doc.entries.map(\.appID), [1, 2, 3, 4])
+        doc.arrangeAlphabetically()
+        XCTAssertEqual(doc.entries.map(\.title), ["Aardvark", "Alpha", "Beta", "Gamma"])
+        XCTAssertEqual(doc.arrangement, .alphabetical)
+        doc.insert(Self.entry(5, "Delta"))               // alphabetical again: sorted in
+        XCTAssertEqual(doc.entries.map(\.title), ["Aardvark", "Alpha", "Beta", "Delta", "Gamma"])
+    }
+
+    func testArrangementRoundTripsAndDefaultsForOldDocuments() throws {
+        var doc = Self.document()
+        doc.move(appID: 10, before: 620)
+        let data = try ShelfDocumentCodec.encode(doc)
+        XCTAssertEqual(try ShelfDocumentCodec.decode(data).arrangement, .custom)
+        // A document written before `arrangement` existed decodes as alphabetical.
+        var json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        json.removeValue(forKey: "arrangement")
+        let old = try JSONSerialization.data(withJSONObject: json)
+        XCTAssertEqual(try ShelfDocumentCodec.decode(old).arrangement, .alphabetical)
+    }
+
     func testInsertSortedOrdering() {
         var doc = ShelfDocument.empty(owner: ShelfOwner(steamID64: nil, displayName: "My Shelf", avatarURL: nil))
         doc.insertSorted(Self.entry(3, "Zelda-like"))

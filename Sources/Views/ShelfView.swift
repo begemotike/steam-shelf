@@ -1,6 +1,19 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import CoreTransferable
+
+/// Drag payload for reordering boxes on the shelf (private to this app).
+struct DraggedBox: Codable, Transferable {
+    let appID: Int
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .steamShelfBox)
+    }
+}
+
+extension UTType {
+    static let steamShelfBox = UTType(exportedAs: "net.outofajam.steamshelf.box")
+}
 
 // MARK: - Root
 
@@ -280,6 +293,7 @@ struct StileView: View {
                 .clipShape(mortise)
                 .frame(width: M.mortiseW, height: M.mortiseH)
             HandleView(side: side, label: label) { model.handleTapped(side) }
+                .dropDestination(for: DraggedBox.self) { _, _ in false } isTargeted: { model.dragHover(over: side, active: $0) }
         }
         .frame(width: M.stileW)
         .frame(maxHeight: .infinity)
@@ -411,6 +425,12 @@ struct ShelfPageView: View {
             }
         }
         .frame(width: layout.baySize.width, height: layout.baySize.height, alignment: .topLeading)
+        .contentShape(Rectangle())
+        .dropDestination(for: DraggedBox.self) { items, _ in
+            guard let dragged = items.first else { return false }
+            model.moveEntry(dragged.appID, before: nil)
+            return true
+        }
         // Window resizes must never animate tile positions (page push uses its own transition).
         .animation(nil, value: layout)
     }
@@ -514,9 +534,22 @@ struct BoxTile: View {
     @Environment(\.shelfScale) private var s
     @State private var loader = CoverLoader()
     @State private var hovering = false
+    @State private var dropTargeted = false
     @State private var frameBox = FrameBox()
 
     private var isOpened: Bool { model.openedAppID == entry.appID }
+
+    private var dragPreview: some View {
+        Group {
+            if let image = loader.readyImage {
+                Image(decorative: image, scale: 2).resizable().aspectRatio(2.0 / 3.0, contentMode: .fit)
+            } else {
+                placeholder
+            }
+        }
+        .frame(width: Theme.Metrics.boxW * s, height: Theme.Metrics.boxH * s)
+        .clipShape(RoundedRectangle(cornerRadius: 2 * s))
+    }
 
     var body: some View {
         let M = Theme.Metrics.self
@@ -538,6 +571,23 @@ struct BoxTile: View {
         .buttonStyle(TilePressStyle())
         .pointerStyle(.link)
         .onHover { hovering = $0 }
+        .draggable(DraggedBox(appID: entry.appID)) { dragPreview }
+        .dropDestination(for: DraggedBox.self) { items, _ in
+            guard let dragged = items.first else { return false }
+            model.moveEntry(dragged.appID, before: entry.appID)
+            return true
+        } isTargeted: { dropTargeted = $0 }
+        .overlay(alignment: .leading) {
+            // Insertion mark: a brass line just left of the box while a drag hovers over it.
+            if dropTargeted {
+                RoundedRectangle(cornerRadius: 1.5 * s)
+                    .fill(Theme.Palette.brassLight)
+                    .frame(width: 3 * s, height: (M.boxH + 12) * s)
+                    .shadow(color: Theme.Palette.brassLight.opacity(0.8), radius: 4 * s)
+                    .offset(x: -(M.spineSliverW + 14) * s)
+                    .allowsHitTesting(false)
+            }
+        }
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("shelfSpace")) } action: { frame in
             frameBox.frame = frame
             if model.openedAppID == entry.appID { model.openedFromFrame = frame }

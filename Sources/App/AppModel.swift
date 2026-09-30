@@ -290,7 +290,7 @@ enum SlideDirection: Sendable { case forward, backward }
                     achievementsEarned: nil, achievementsTotal: nil, achievementsState: .unknown, fetchedAt: nil),
                 art: isDemo ? ArtRefs(portraitURLs: [], headerURL: nil) : Self.artRefs(appID: appID, assets: library?.assets[appID]),
                 blurb: nil)
-            document.insertSorted(entry)
+            document.insert(entry)
         }
     }
 
@@ -298,6 +298,34 @@ enum SlideDirection: Sendable { case forward, backward }
         document.updatedAt = Date()
         pageIndex = pagination.clamp(pageIndex)
         scheduleSave()
+    }
+
+    // MARK: Arrangement
+
+    var isCustomArranged: Bool { document.arrangement == .custom }
+
+    /// Drag-and-drop reorder: put `appID` before `targetAppID`, or at the end when nil.
+    func moveEntry(_ appID: Int, before targetAppID: Int?) {
+        guard document.move(appID: appID, before: targetAppID) else { return }
+        finishShelfMutation()
+    }
+
+    func arrangeAlphabetically() {
+        guard isCustomArranged else { return }
+        document.arrangeAlphabetically()
+        finishShelfMutation()
+    }
+
+    /// Drag hovering over a handle: flip to that page after a short dwell so boxes can cross pages.
+    private var dwellTask: Task<Void, Never>?
+    func dragHover(over side: HandleSide, active: Bool) {
+        dwellTask?.cancel()
+        guard active else { return }
+        dwellTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(450))
+            guard !Task.isCancelled, let self else { return }
+            self.go(to: self.pagination.target(for: side, clickCount: 1, currentPage: self.pageIndex))
+        }
     }
 
     // MARK: Entry edits

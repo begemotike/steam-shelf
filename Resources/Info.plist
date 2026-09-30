@@ -43,6 +43,16 @@
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Steam Shelf Box Drag</string>
+			<key>UTTypeIdentifier</key>
+			<string>net.outofajam.steamshelf.box</string>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
 				<string>public.json</string>
 				<string>public.data</string>
 			</array>
