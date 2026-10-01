@@ -6,6 +6,7 @@ enum KeychainError: Error { case status(OSStatus) }
 enum Keychain {
     static let service = "net.outofajam.SteamShelf"
     static let apiKeyAccount = "steam-web-api-key"
+    static let aiKeyAccount = "anthropic-api-key"
 
     private static func baseQuery(account: String) -> [String: Any] {
         [

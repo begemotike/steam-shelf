@@ -4,6 +4,22 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        TabView {
+            LibrarySettingsTab()
+                .tabItem { Label("Library", systemImage: "books.vertical") }
+            ShelfKeeperSettingsTab()
+                .tabItem { Label("Shelf-Keeper", systemImage: "text.book.closed") }
+        }
+        .frame(width: 640, height: 760)
+        .tint(Theme.Palette.brass)
+        .task { if model.mode != .tests { await TextureLibrary.shared.prepare() } }
+    }
+}
+
+private struct LibrarySettingsTab: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
         VStack(spacing: 0) {
             SettingsHeader()
             if model.isDemo { DemoBanner() }
@@ -11,9 +27,73 @@ struct SettingsView: View {
             Divider()
             LibraryChecklist()
         }
-        .frame(width: 640, height: 760)
-        .tint(Theme.Palette.brass)
-        .task { if model.mode != .tests { await TextureLibrary.shared.prepare() } }
+    }
+}
+
+private struct ShelfKeeperSettingsTab: View {
+    @Environment(AppModel.self) private var model
+    @State private var keyDraft = ""
+
+    private var canSaveKey: Bool { !keyDraft.trimmingCharacters(in: .whitespaces).isEmpty && model.mode == .normal }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            SettingsHeader()
+            Form {
+                Section("Save file access") {
+                    LabeledContent("Steam folder") {
+                        if model.hasSaveAccess {
+                            HStack {
+                                Text("Granted ✓").foregroundStyle(.secondary)
+                                Button("Revoke") { model.revokeSaveAccess() }
+                            }
+                        } else {
+                            Button("Grant Access…") { model.requestSaveAccess() }
+                                .disabled(model.mode != .normal)
+                        }
+                    }
+                    Text("Saves live inside the Steam folder, which macOS keeps private until you choose it.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("Anthropic API key") {
+                    if model.hasAIKey {
+                        LabeledContent("API Key") {
+                            HStack {
+                                Text("••••  Saved in Keychain").foregroundStyle(.secondary)
+                                Button("Forget") { model.forgetAIKey() }
+                            }
+                        }
+                    } else {
+                        LabeledContent("API Key") {
+                            HStack {
+                                SecureField("", text: $keyDraft, prompt: Text("sk-ant-…"))
+                                    .textFieldStyle(.roundedBorder)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(minWidth: 260)
+                                    .onSubmit { saveKey() }
+                                Button("Save") { saveKey() }
+                                    .disabled(!canSaveKey)
+                            }
+                        }
+                    }
+                    Link("Get a key at console.anthropic.com", destination: URL(string: "https://console.anthropic.com/")!)
+                        .font(.footnote)
+                    Text("When you ask for notes on a game, a summary of that game's save files (save names, dates, party, quests and recent conversations) is sent to Anthropic's API using your key. Nothing is sent until you press Write Notes.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Section("Games with notes") {
+                    ForEach(Personalizers.all.map(\.displayName), id: \.self) { Text($0) }
+                }
+            }
+            .formStyle(.grouped)
+        }
+    }
+
+    private func saveKey() {
+        guard canSaveKey else { return }
+        model.saveAIKey(keyDraft)
+        keyDraft = ""
     }
 }
 

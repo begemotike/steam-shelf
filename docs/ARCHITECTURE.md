@@ -764,3 +764,12 @@ Info.plist keys: as in project.yml `info.properties` — `CFBundleDisplayName`, 
 | P2P shelf sharing | new `PeerShelfSource: ShelfSource` (`isEditable = false`), transport (MultipeerConnectivity or a relay) ships `ShelfDocumentCodec.encode(doc.forSharing())` | versioned Codable document, art as public URLs, blurb stored in entries, `ShelfRecord.kindRaw` |
 | AI blurbs | `AIBackOfBoxProvider: BackOfBoxProvider`, set `AppModel.backOfBox` | `BackOfBoxContext` (Codable, prompt-ready), `BackOfBoxContent` with `providerID` + fingerprint, `storeDetails` slot |
 | Store details | `SteamClient.appDetails(appID:)` (one app per call, lazy, cached in `ShelfEntry`) | `StoreDetailsLite` type |
+
+## Shelf-Keeper notes (see PERSONALIZER.md)
+
+- `Sources/Personalizer/LarianFormats.swift` - LZ4, zstd (SwiftPM `libzstd`), LSPK package and LSF tree readers.
+- `Sources/Personalizer/GamePersonalizer.swift`, `BG3Personalizer.swift` - per-game digest of local saves.
+- `Sources/Personalizer/ShelfKeeperAI.swift` - Anthropic Messages request/response (`KeeperNotes`).
+- `Sources/Personalizer/SteamFolderAccess.swift` - security-scoped bookmark for the Steam folder.
+- `Sources/BackOfBox/KeeperNotesPanel.swift` - the Notes panel in the open-box view.
+- `Tests/PersonalizerTests.swift` - offline tests using `Tests/LarianFixtures.swift`.

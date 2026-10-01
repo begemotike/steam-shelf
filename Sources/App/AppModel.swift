@@ -15,6 +15,7 @@ enum SlideDirection: Sendable { case forward, backward }
         static let steamIDInput = "steamIDInput"
         static let resolvedSteamID = "resolvedSteamID"
         static let hasAPIKey = "hasAPIKey"
+        static let hasAIKey = "hasAIKey"
         static let playerSummary = "playerSummary"
         static let shelfLights = "shelfLights"
     }
@@ -28,6 +29,8 @@ enum SlideDirection: Sendable { case forward, backward }
         didSet { if mode == .normal { UserDefaults.standard.set(resolvedSteamID, forKey: DefaultsKey.resolvedSteamID) } }
     }
     var hasAPIKey: Bool
+    var hasAIKey: Bool
+    var hasSaveAccess: Bool
     var playerSummary: PlayerSummary?
 
     // Data
@@ -45,6 +48,12 @@ enum SlideDirection: Sendable { case forward, backward }
     var openedAppID: Int?
     var openedFromFrame: CGRect = .zero
     var isEditingLabel = false
+    var isShowingNotes = false
+
+    // Shelf-Keeper notes
+    enum KeeperState: Equatable { case idle, reading, writing, failed(String) }
+    var keeperState: [Int: KeeperState] = [:]
+    private let keeperAI = ShelfKeeperAI()
 
     /// Warm LED strips under the crown and each plank (DESIGN addendum: shelf lights).
     var lightsOn: Bool {
@@ -91,6 +100,8 @@ enum SlideDirection: Sendable { case forward, backward }
             resolvedSteamID = defaults.string(forKey: DefaultsKey.resolvedSteamID)
             // Mirrored flag: reading the Keychain at launch would prompt after every ad-hoc rebuild.
             hasAPIKey = defaults.bool(forKey: DefaultsKey.hasAPIKey)
+            hasAIKey = defaults.bool(forKey: DefaultsKey.hasAIKey)
+            hasSaveAccess = SteamFolderAccess.isGranted
             playerSummary = defaults.data(forKey: DefaultsKey.playerSummary)
                 .flatMap { try? JSONDecoder().decode(PlayerSummary.self, from: $0) }
             source = LocalShelfSource(container: container)
@@ -98,6 +109,8 @@ enum SlideDirection: Sendable { case forward, backward }
             steamIDInput = ""
             resolvedSteamID = nil
             hasAPIKey = false
+            hasAIKey = false
+            hasSaveAccess = false
             playerSummary = nil
             source = DemoShelfSource()
         }
@@ -108,6 +121,9 @@ enum SlideDirection: Sendable { case forward, backward }
     // MARK: Lifecycle
 
     func onLaunch() async {
+        #if DEBUG
+        await dumpDigestIfRequested()
+        #endif
         guard mode == .normal, !isDemo else { return }
         if let doc = try? source.load() {
             document = doc
@@ -145,6 +161,36 @@ enum SlideDirection: Sendable { case forward, backward }
         Keychain.delete(account: Keychain.apiKeyAccount)
         hasAPIKey = false
         UserDefaults.standard.set(false, forKey: DefaultsKey.hasAPIKey)
+    }
+
+    func saveAIKey(_ key: String) {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard mode == .normal, !trimmed.isEmpty else { return }
+        do {
+            try Keychain.save(trimmed, account: Keychain.aiKeyAccount)
+            hasAIKey = true
+            UserDefaults.standard.set(true, forKey: DefaultsKey.hasAIKey)
+        } catch {
+            Self.log.error("Couldn't save the Anthropic key in the Keychain")
+        }
+    }
+
+    func forgetAIKey() {
+        guard mode == .normal else { return }
+        Keychain.delete(account: Keychain.aiKeyAccount)
+        hasAIKey = false
+        UserDefaults.standard.set(false, forKey: DefaultsKey.hasAIKey)
+    }
+
+    func requestSaveAccess() {
+        guard mode == .normal else { return }
+        hasSaveAccess = SteamFolderAccess.requestAccess()
+    }
+
+    func revokeSaveAccess() {
+        guard mode == .normal else { return }
+        SteamFolderAccess.revoke()
+        hasSaveAccess = false
     }
 
     private func requireKey() throws -> String {
@@ -440,13 +486,21 @@ enum SlideDirection: Sendable { case forward, backward }
     func close() {
         openedAppID = nil
         isEditingLabel = false
+        isShowingNotes = false
     }
 
     // MARK: Demo
 
     func startDemo() {
         saveTask?.cancel()
-        let doc = DemoData.document()
+        var doc = DemoData.document()
+        #if DEBUG
+        // `--demo-notes`: give the first shelved entry stored Shelf-Keeper notes, to look at the panel without an API call.
+        if CommandLine.arguments.contains("--demo-notes"), let id = doc.shelvedEntries.first?.appID,
+           let i = doc.entries.firstIndex(where: { $0.appID == id }) {
+            doc.entries[i].blurb = DebugNotes.sample
+        }
+        #endif
         source = DemoShelfSource(document: doc)
         document = doc
         library = DemoData.library()
@@ -523,9 +577,126 @@ enum SlideDirection: Sendable { case forward, backward }
 
     func blurbIfNeeded(for appID: Int) async {
         guard let entry = document.entries.first(where: { $0.appID == appID }) else { return }
+        if entry.blurb?.isAIWritten == true { return }       // Shelf-Keeper notes are never replaced by the template
         let context = BackOfBoxContext(entry: entry)
         if let existing = entry.blurb, existing.inputFingerprint == context.fingerprint { return }
         guard let content = try? await backOfBox.content(for: context) else { return }
         update(appID) { $0.blurb = content }
     }
+
+    // MARK: Shelf-Keeper notes
+
+    /// Notes can be written only on the user's own local shelf (not the demo, not an imported one).
+    var canWriteNotes: Bool { mode == .normal && !isDemo && source.sourceID == "local" }
+
+    func keeperState(for appID: Int) -> KeeperState { keeperState[appID] ?? .idle }
+
+    func writeNotes(for appID: Int) async {
+        guard canWriteNotes, let personalizer = Personalizers.forApp(appID) else { return }
+        switch keeperState(for: appID) {
+        case .reading, .writing: return
+        case .idle, .failed: break
+        }
+        guard hasSaveAccess else { keeperState[appID] = .failed(KeeperText.noAccess); return }
+        guard hasAIKey, let key = Keychain.read(account: Keychain.aiKeyAccount), !key.isEmpty else {
+            keeperState[appID] = .failed(KeeperText.noKey); return
+        }
+
+        keeperState[appID] = .reading
+        let digest: GameDigest
+        do {
+            let found = try await Task.detached(priority: .userInitiated) {
+                try SteamFolderAccess.withAccess { try personalizer.digest(steamRoot: $0) }
+            }.value
+            guard let found else { throw PersonalizerError.noSaves }
+            digest = found
+        } catch {
+            keeperState[appID] = .failed(KeeperText.message(for: error))
+            return
+        }
+
+        keeperState[appID] = .writing
+        do {
+            let notes = try await keeperAI.notes(game: personalizer.displayName, digest: digest, key: key)
+            update(appID) {
+                $0.blurb = BackOfBoxContent(
+                    blurb: notes.blurb, tagline: notes.tagline, providerID: "anthropic.\(ShelfKeeperAI.model)",
+                    inputFingerprint: digest.fingerprint, generatedAt: Date(), observations: notes.observations, detail: notes.playstyle)
+            }
+            keeperState[appID] = .idle
+        } catch is CancellationError {
+            keeperState[appID] = .idle
+        } catch {
+            keeperState[appID] = .failed(KeeperText.message(for: error))
+        }
+    }
+
+    /// Returns the entry to the local template blurb.
+    func clearNotes(for appID: Int) {
+        guard canWriteNotes else { return }
+        update(appID) { $0.blurb = nil }
+        keeperState[appID] = .idle
+        Task { await blurbIfNeeded(for: appID) }
+    }
 }
+
+enum KeeperText {
+    static let noAccess = "Steam Shelf doesn't have access to your Steam folder yet."
+    static let noKey = "Add your Anthropic API key in Settings first."
+
+    static func message(for error: Error) -> String {
+        if let e = error as? KeeperError { return e.userMessage }
+        switch error as? PersonalizerError {
+        case .noFolderAccess?: return noAccess
+        case .noSaves?: return "No save files were found for this game."
+        case .corrupt?, .unsupported?: return "The save files couldn't be read."
+        case nil: return error.localizedDescription
+        }
+    }
+}
+
+#if DEBUG
+enum DebugNotes {
+    static let sample = BackOfBoxContent(
+        blurb: "Eleven saves named after what you did to people, and one honest 'Goblin Camp CLEARED' with the caps lock firmly on.",
+        tagline: "Chatty, thorough, vengeful.",
+        providerID: "anthropic.claude-opus-5-5", inputFingerprint: "118:1780000000", generatedAt: Date(),
+        observations: [
+            "Your save names read like a rap sheet: 'killed ethel outside' is not a title most players volunteer.",
+            "At 17h 17m you reloaded to 17h 5m and called it 'new attempt'. We both know it was a second attempt at the same bad idea.",
+            "Gale is in the party for every save before 40 hours, then vanishes. Either he has finally learned something, or you have.",
+            "Eleven consecutive autosaves on one Tuesday night, ending after midnight. Sleep is a side quest you keep declining.",
+            "You typed 'CLEARED' in capitals exactly once, which tells us how that felt.",
+        ],
+        detail: "You talk first and swing later: Persuasion and Insight checks outnumber everything else, and the same dialogue with the dead keeps coming back. When talking fails you take the Strength route and do not seem sorry.")
+}
+#endif
+
+#if DEBUG
+extension AppModel {
+    /// `--dump-digest <appid>`: writes the personalizer digest to <Caches>/SteamShelf/digest-<appid>.txt (no AI call),
+    /// so the Swift port can be compared with the Python reference on real saves.
+    func dumpDigestIfRequested() async {
+        let args = CommandLine.arguments
+        guard mode == .normal, let flag = args.firstIndex(of: "--dump-digest"), flag + 1 < args.count,
+              let appID = Int(args[flag + 1]), let personalizer = Personalizers.forApp(appID) else { return }
+        let log = Logger(subsystem: "net.outofajam.SteamShelf", category: "DumpDigest")
+        guard hasSaveAccess else { log.error("--dump-digest: save access not granted"); return }
+        do {
+            let digest = try await Task.detached(priority: .userInitiated) {
+                try SteamFolderAccess.withAccess { try personalizer.digest(steamRoot: $0) }
+            }.value
+            guard let digest else { log.error("--dump-digest: no saves found"); return }
+            let dir = try FileManager.default.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+                .appending(path: "SteamShelf", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let file = dir.appending(path: "digest-\(appID).txt")
+            let text = "== SAVE HISTORY ==\n\(digest.history)\n\n== MOST RECENT SAVE ==\n\(digest.latest)\n\nfingerprint: \(digest.fingerprint)\nsaves: \(digest.saveCount)\n"
+            try text.write(to: file, atomically: true, encoding: .utf8)
+            log.info("Wrote digest to \(file.path, privacy: .public)")
+        } catch {
+            log.error("--dump-digest failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+}
+#endif

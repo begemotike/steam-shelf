@@ -30,6 +30,9 @@ packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     from: "2.10.0"
+  zstd:
+    url: https://github.com/facebook/zstd
+    from: "1.5.7"
 targets:
   SteamShelf:
     type: application
@@ -40,6 +43,8 @@ targets:
         buildPhase: resources
     dependencies:
       - package: Sparkle
+      - package: zstd
+        product: libzstd
     info:
       path: Resources/Info.plist
       properties:
@@ -72,6 +77,8 @@ targets:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         com.apple.security.files.user-selected.read-write: true
+        # Persist the user's grant of the Steam folder (save files) across launches.
+        com.apple.security.files.bookmarks.app-scope: true
         # Read-only peek at the Steam client's library manifest so the box can say Play vs Install.
         com.apple.security.temporary-exception.files.home-relative-path.read-only:
           - /Library/Application Support/Steam/steamapps/

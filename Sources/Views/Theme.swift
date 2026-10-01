@@ -91,6 +91,7 @@ enum Theme {
         // Open box
         static let frontFaceFill: CGFloat = 0.628
         static let editorPanelW: CGFloat = 340
+        static let notesPanelW: CGFloat = 380
 
         // Textures / canvases
         static let coverW: CGFloat = 600

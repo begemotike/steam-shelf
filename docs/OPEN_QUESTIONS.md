@@ -67,3 +67,13 @@ Each item is built with the **default** shown. Revisit any time; none block v1.
 - Crown knob (bulb), Shelf ▸ Shelf Lights, ⌘L. Persisted in UserDefaults (`shelfLights`), off by default, 0.5 s cross-fade.
 - Per row: `LightStrip` = a tucked-away core line, a short halo, and a warm wash (`lampWash` #FFB456, screen blend) hot under the plank and gone by ~70% of the row, masked so it pools toward the centre and fades before the stiles; under-plank shadow drops to 25%; planks get a warm top spill; covers get a soft warm top light and a bright top edge; a 3.5% ambient warm bounce over the bay.
 - Tuned over three rounds against the two reference photos (amber LED strips). Q21: warmer amber (as now, ~2700 K) or the cooler cream of the second reference? Default: amber.
+
+## Shelf-Keeper notes
+- `LSF.parse(keepOnly:)` returns only the kept roots and builds `LSFNode`s only for their subtrees (the full node table is still walked for parent links), to keep memory low on ~300k-node Globals.lsf.
+- "N saves read" in the panel footer is parsed from the notes' `inputFingerprint` prefix (`<saveCount>:<mtime>`), so no extra model field was added.
+- Save name in the history comes from `SaveInfo.json` ("Save Name"), falling back to the folder suffix. Saves whose package or SaveInfo cannot be read are skipped; if none are readable the digest throws `corrupt`.
+- Collapsed autosave lines use the last autosave's date and its class/party; a run of one autosave is shown normally. Playtime is `-` when the name has none. Dice tallies are separated by `;`.
+- History quest categories other than `CompletedQuests` are listed one line each; `HIDDEN_` quests are hidden everywhere.
+- Notes can be written only on the local shelf outside demo (`canWriteNotes`); stored notes are shown read-only elsewhere. Rewrite/Clear are hidden when not writable. Clear asks for confirmation. A failed rewrite offers "Keep Old Notes".
+- The notes panel is 380 pt wide (editor is 340) so long text reads comfortably; the back-of-box blurb layout was left unchanged (5 lines, 0.7 scale), a 160-char blurb fits in 3 lines.
+- Debug-only `--demo-notes` seeds the first demo entry with sample notes; `--dump-digest <appid>` writes the digest (history + latest) to Caches/SteamShelf.

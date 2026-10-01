@@ -57,6 +57,17 @@ struct BackOfBoxContent: Codable, Sendable, Equatable {
     var providerID: String
     var inputFingerprint: String
     var generatedAt: Date
+    /// Shelf-Keeper notes (docs/PERSONALIZER.md §6); absent in older documents.
+    var observations: [String]?
+    var detail: String?
+
+    var isAIWritten: Bool { providerID.hasPrefix("anthropic.") }
+
+    /// Notes fingerprints are "<saveCount>:<latest mtime>", so the count of saves read travels with the notes.
+    var savesRead: Int? {
+        guard isAIWritten, let head = inputFingerprint.split(separator: ":").first else { return nil }
+        return Int(head)
+    }
 }
 
 protocol BackOfBoxProvider: Sendable {

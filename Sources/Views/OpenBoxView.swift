@@ -43,6 +43,9 @@ struct OpenBoxView: View {
 
     // MARK: Geometry
 
+    private var panelOpen: Bool { model.isEditingLabel || model.isShowingNotes }
+    private var panelW: CGFloat { model.isShowingNotes ? Theme.Metrics.notesPanelW : Theme.Metrics.editorPanelW }
+
     /// The bay rect in overlay space: the window minus crown, base and stiles (PHASE_C §C.6).
     private var bayRect: CGRect {
         let M = Theme.Metrics.self
@@ -52,12 +55,12 @@ struct OpenBoxView: View {
     }
     private var stageSide: CGFloat {
         let bay = bayRect
-        let reserved = model.isEditingLabel ? Theme.Metrics.editorPanelW + 60 : 80
+        let reserved = panelOpen ? panelW + 60 : 80
         return max(160, min(bay.width - reserved, bay.height - 100))
     }
     private var stageCenter: CGPoint {
         let bay = bayRect
-        let reserved = model.isEditingLabel ? Theme.Metrics.editorPanelW + 60 : 0
+        let reserved = panelOpen ? panelW + 60 : 0
         return CGPoint(x: bay.minX + (bay.width - reserved) / 2, y: bay.midY)
     }
     private var targetRect: CGRect {
@@ -85,7 +88,7 @@ struct OpenBoxView: View {
                     .position(stageCenter)
                     .opacity(stageOpacity)
                     .onTapGesture(count: 2) { if playLabel != nil { launchGame() } }
-                    .animation(Theme.Motion.panel, value: model.isEditingLabel)
+                    .animation(Theme.Motion.panel, value: panelOpen)
                     .id(generation)
                 }
 
@@ -96,13 +99,20 @@ struct OpenBoxView: View {
                               y: stageCenter.y + Theme.Metrics.frontFaceFill * stageSide / 2 + 24 + 15)
                     .opacity(toolbarOpacity)
                     .allowsHitTesting(phase == .presented)
-                    .animation(Theme.Motion.panel, value: model.isEditingLabel)
+                    .animation(Theme.Motion.panel, value: panelOpen)
 
                 if model.isEditingLabel, phase == .presented, let entry {
                     LabelEditorPanel(appID: entry.appID)
                         .frame(width: Theme.Metrics.editorPanelW, height: max(120, bayRect.height - 32))
                         .position(x: bayRect.maxX - 16 - Theme.Metrics.editorPanelW / 2, y: bayRect.midY)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+
+                if model.isShowingNotes, phase == .presented, let entry {
+                    KeeperNotesPanel(appID: entry.appID)
+                        .frame(width: Theme.Metrics.notesPanelW, height: max(120, bayRect.height - 32))
+                        .position(x: bayRect.maxX - 16 - Theme.Metrics.notesPanelW / 2, y: bayRect.midY)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
         }
@@ -134,6 +144,9 @@ struct OpenBoxView: View {
         }
         .onChange(of: model.isEditingLabel) { _, editing in
             if editing { motion.showBack() } else if phase == .presented { focused = true }
+        }
+        .onChange(of: model.isShowingNotes) { _, showing in
+            if showing { motion.showBack() } else if phase == .presented { focused = true }
         }
     }
 
@@ -171,6 +184,13 @@ struct OpenBoxView: View {
         beginClose()
     }
 
+    /// A personalizer exists for this game (and we may write), or notes are already stored on the entry.
+    private var showsNotesButton: Bool {
+        guard let entry else { return false }
+        if entry.blurb?.isAIWritten == true, entry.blurb?.observations?.isEmpty == false { return true }
+        return model.canWriteNotes && Personalizers.forApp(entry.appID) != nil
+    }
+
     private var toolbar: some View {
         HStack(spacing: 12) {
             if let playLabel {
@@ -186,9 +206,16 @@ struct OpenBoxView: View {
                 .buttonStyle(BrassPillButtonStyle())
             if model.source.isEditable {
                 Button(model.isEditingLabel ? "Hide Label" : "Edit Label") {
-                    withAnimation(Theme.Motion.panel) { model.isEditingLabel.toggle() }
+                    withAnimation(Theme.Motion.panel) { model.isShowingNotes = false; model.isEditingLabel.toggle() }
                 }
                 .buttonStyle(BrassPillButtonStyle())
+            }
+            if showsNotesButton {
+                Button(model.isShowingNotes ? "Hide Notes" : "Notes") {
+                    withAnimation(Theme.Motion.panel) { model.isEditingLabel = false; model.isShowingNotes.toggle() }
+                }
+                .buttonStyle(BrassPillButtonStyle())
+                .help("What the Shelf-Keeper makes of your saves")
             }
             Button("Close") { beginClose() }
                 .buttonStyle(BrassPillButtonStyle())
@@ -301,7 +328,7 @@ struct OpenBoxView: View {
         let gen = generation
         motion.idleEnabled = false
         backTask?.cancel()
-        withAnimation(Theme.Motion.panel) { model.isEditingLabel = false }
+        withAnimation(Theme.Motion.panel) { model.isEditingLabel = false; model.isShowingNotes = false }
         withAnimation(.easeOut(duration: 0.2)) { toolbarOpacity = 0 }
         motion.returnToFront()
 
