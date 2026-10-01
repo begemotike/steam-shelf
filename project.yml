@@ -18,8 +18,9 @@ settings:
     DEAD_CODE_STRIPPING: YES
   configs:
     Debug:
-      # Ad-hoc in Debug so `make` never needs the certificate; hardened runtime off so the test bundle can inject.
-      CODE_SIGN_IDENTITY: "-"
+      # Same Developer ID as Release so the app's identity is stable across rebuilds (otherwise the
+      # Keychain asks for the password after every build). Hardened runtime off so the test bundle can inject.
+      CODE_SIGN_IDENTITY: "Developer ID Application"
       ENABLE_HARDENED_RUNTIME: NO
     Release:
       CODE_SIGN_IDENTITY: "Developer ID Application"
