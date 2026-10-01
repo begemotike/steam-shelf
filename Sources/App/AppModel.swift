@@ -16,6 +16,8 @@ enum SlideDirection: Sendable { case forward, backward }
         static let resolvedSteamID = "resolvedSteamID"
         static let hasAPIKey = "hasAPIKey"
         static let hasAIKey = "hasAIKey"
+        static let aiKeyProviders = "aiKeyProviders"
+        static let aiConfig = "aiConfig"
         static let playerSummary = "playerSummary"
         static let shelfLights = "shelfLights"
     }
@@ -29,7 +31,21 @@ enum SlideDirection: Sendable { case forward, backward }
         didSet { if mode == .normal { UserDefaults.standard.set(resolvedSteamID, forKey: DefaultsKey.resolvedSteamID) } }
     }
     var hasAPIKey: Bool
-    var hasAIKey: Bool
+    /// Services whose key is in the Keychain (mirrored here so launch never reads the Keychain).
+    private(set) var aiKeyProviders: Set<String>
+    /// The chosen AI service, endpoint and model for Shelf-Keeper notes.
+    var aiConfig: AIConfig {
+        didSet {
+            guard aiConfig != oldValue else { return }
+            if mode == .normal, let data = try? JSONEncoder().encode(aiConfig) { UserDefaults.standard.set(data, forKey: DefaultsKey.aiConfig) }
+            if aiConfig.providerID != oldValue.providerID || aiConfig.baseURL != oldValue.baseURL { availableModels = []; modelsState = .idle }
+        }
+    }
+    private(set) var availableModels: [String] = []
+    private(set) var modelsState: LoadState = .idle
+    var hasAIKey: Bool { aiKeyProviders.contains(aiConfig.providerID) }
+    /// A service is chosen, it has a key if it needs one, and a model is picked.
+    var aiReady: Bool { (hasAIKey || !aiConfig.preset.needsKey) && !aiConfig.model.isEmpty && aiConfig.base != nil }
     var hasSaveAccess: Bool
     var playerSummary: PlayerSummary?
 
@@ -100,7 +116,10 @@ enum SlideDirection: Sendable { case forward, backward }
             resolvedSteamID = defaults.string(forKey: DefaultsKey.resolvedSteamID)
             // Mirrored flag: reading the Keychain at launch would prompt after every ad-hoc rebuild.
             hasAPIKey = defaults.bool(forKey: DefaultsKey.hasAPIKey)
-            hasAIKey = defaults.bool(forKey: DefaultsKey.hasAIKey)
+            var providers = Set(defaults.stringArray(forKey: DefaultsKey.aiKeyProviders) ?? [])
+            if defaults.bool(forKey: DefaultsKey.hasAIKey) { providers.insert("anthropic") }   // key saved before multi-service support
+            aiKeyProviders = providers
+            aiConfig = defaults.data(forKey: DefaultsKey.aiConfig).flatMap { try? JSONDecoder().decode(AIConfig.self, from: $0) } ?? .default
             hasSaveAccess = SteamFolderAccess.isGranted
             playerSummary = defaults.data(forKey: DefaultsKey.playerSummary)
                 .flatMap { try? JSONDecoder().decode(PlayerSummary.self, from: $0) }
@@ -109,7 +128,8 @@ enum SlideDirection: Sendable { case forward, backward }
             steamIDInput = ""
             resolvedSteamID = nil
             hasAPIKey = false
-            hasAIKey = false
+            aiKeyProviders = []
+            aiConfig = .default
             hasSaveAccess = false
             playerSummary = nil
             source = DemoShelfSource()
@@ -163,23 +183,60 @@ enum SlideDirection: Sendable { case forward, backward }
         UserDefaults.standard.set(false, forKey: DefaultsKey.hasAPIKey)
     }
 
+    /// Saves a pasted key. When its prefix identifies a service (sk-ant-, sk-or-, gsk_, AIza, …) the
+    /// service is switched to match, so pasting is all the user has to do.
     func saveAIKey(_ key: String) {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard mode == .normal, !trimmed.isEmpty else { return }
+        if let detected = AIProviders.detect(fromKey: trimmed), detected.id != aiConfig.providerID {
+            aiConfig = AIConfig(preset: detected)
+        }
         do {
-            try Keychain.save(trimmed, account: Keychain.aiKeyAccount)
-            hasAIKey = true
-            UserDefaults.standard.set(true, forKey: DefaultsKey.hasAIKey)
+            try Keychain.save(trimmed, account: Keychain.aiKeyAccount(for: aiConfig.providerID))
+            aiKeyProviders.insert(aiConfig.providerID)
+            persistAIKeyProviders()
+            Task { await loadModels() }
         } catch {
-            Self.log.error("Couldn't save the Anthropic key in the Keychain")
+            Self.log.error("Couldn't save the AI key in the Keychain")
+        }
+    }
+
+    private func persistAIKeyProviders() {
+        UserDefaults.standard.set(aiKeyProviders.sorted(), forKey: DefaultsKey.aiKeyProviders)
+        UserDefaults.standard.set(aiKeyProviders.contains("anthropic"), forKey: DefaultsKey.hasAIKey)
+    }
+
+    func selectAIProvider(_ id: String) {
+        guard id != aiConfig.providerID else { return }
+        aiConfig = AIConfig(preset: AIProviders.preset(id))
+        if aiReady || hasAIKey || !aiConfig.preset.needsKey { Task { await loadModels() } }
+    }
+
+    /// Asks the service which models it offers (fills the picker in Settings).
+    func loadModels() async {
+        guard mode == .normal, aiConfig.base != nil, hasAIKey || !aiConfig.preset.needsKey else { return }
+        let config = aiConfig
+        let key = Keychain.read(account: Keychain.aiKeyAccount(for: config.providerID)) ?? ""
+        modelsState = .loading("Asking for the model list…")
+        do {
+            let models = try await keeperAI.models(key: key, config: config)
+            guard config.providerID == aiConfig.providerID, config.baseURL == aiConfig.baseURL else { return }
+            availableModels = models
+            modelsState = .idle
+        } catch is CancellationError {
+            modelsState = .idle
+        } catch {
+            guard config.providerID == aiConfig.providerID else { return }
+            modelsState = .failed((error as? KeeperError)?.userMessage ?? error.localizedDescription)
         }
     }
 
     func forgetAIKey() {
         guard mode == .normal else { return }
-        Keychain.delete(account: Keychain.aiKeyAccount)
-        hasAIKey = false
-        UserDefaults.standard.set(false, forKey: DefaultsKey.hasAIKey)
+        Keychain.delete(account: Keychain.aiKeyAccount(for: aiConfig.providerID))
+        aiKeyProviders.remove(aiConfig.providerID)
+        persistAIKeyProviders()
+        availableModels = []
     }
 
     func requestSaveAccess() {
@@ -598,9 +655,10 @@ enum SlideDirection: Sendable { case forward, backward }
         case .idle, .failed: break
         }
         guard hasSaveAccess else { keeperState[appID] = .failed(KeeperText.noAccess); return }
-        guard hasAIKey, let key = Keychain.read(account: Keychain.aiKeyAccount), !key.isEmpty else {
-            keeperState[appID] = .failed(KeeperText.noKey); return
-        }
+        guard aiReady else { keeperState[appID] = .failed(KeeperText.noKey); return }
+        let config = aiConfig
+        let key = Keychain.read(account: Keychain.aiKeyAccount(for: config.providerID)) ?? ""
+        guard !key.isEmpty || !config.preset.needsKey else { keeperState[appID] = .failed(KeeperText.noKey); return }
 
         keeperState[appID] = .reading
         let digest: GameDigest
@@ -617,10 +675,10 @@ enum SlideDirection: Sendable { case forward, backward }
 
         keeperState[appID] = .writing
         do {
-            let notes = try await keeperAI.notes(game: personalizer.displayName, digest: digest, key: key)
+            let notes = try await keeperAI.notes(game: personalizer.displayName, digest: digest, key: key, config: config)
             update(appID) {
                 $0.blurb = BackOfBoxContent(
-                    blurb: notes.blurb, tagline: notes.tagline, providerID: "anthropic.\(ShelfKeeperAI.model)",
+                    blurb: notes.blurb, tagline: notes.tagline, providerID: config.contentProviderID,
                     inputFingerprint: digest.fingerprint, generatedAt: Date(), observations: notes.observations, detail: notes.playstyle)
             }
             keeperState[appID] = .idle
@@ -642,7 +700,7 @@ enum SlideDirection: Sendable { case forward, backward }
 
 enum KeeperText {
     static let noAccess = "Steam Shelf doesn't have access to your Steam folder yet."
-    static let noKey = "Add your Anthropic API key in Settings first."
+    static let noKey = "Choose an AI service, key and model in Settings first."
 
     static func message(for error: Error) -> String {
         if let e = error as? KeeperError { return e.userMessage }

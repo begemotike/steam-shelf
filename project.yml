@@ -62,6 +62,9 @@ targets:
         LSApplicationCategoryType: public.app-category.entertainment
         LSMinimumSystemVersion: "15.0"
         NSHumanReadableCopyright: "© 2026 Out of a Jam"
+        # Plain http is allowed only to this Mac (a local Ollama server for Shelf-Keeper notes).
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: net.outofajam.steamshelf.box
             UTTypeDescription: Steam Shelf Box Drag

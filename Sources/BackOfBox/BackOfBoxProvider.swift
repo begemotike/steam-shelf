@@ -61,7 +61,7 @@ struct BackOfBoxContent: Codable, Sendable, Equatable {
     var observations: [String]?
     var detail: String?
 
-    var isAIWritten: Bool { providerID.hasPrefix("anthropic.") }
+    var isAIWritten: Bool { providerID.hasPrefix("ai.") || providerID.hasPrefix("anthropic.") }
 
     /// Notes fingerprints are "<saveCount>:<latest mtime>", so the count of saves read travels with the notes.
     var savesRead: Int? {

@@ -37,6 +37,7 @@ private struct ShelfKeeperSettingsTab: View {
     private var canSaveKey: Bool { !keyDraft.trimmingCharacters(in: .whitespaces).isEmpty && model.mode == .normal }
 
     var body: some View {
+        @Bindable var model = model
         VStack(spacing: 0) {
             SettingsHeader()
             Form {
@@ -55,7 +56,23 @@ private struct ShelfKeeperSettingsTab: View {
                     Text("Saves live inside the Steam folder, which macOS keeps private until you choose it.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                Section("Anthropic API key") {
+                Section("AI service") {
+                    Picker("Service", selection: Binding(get: { model.aiConfig.providerID }, set: { model.selectAIProvider($0) })) {
+                        ForEach(AIProviders.all) { Text($0.name).tag($0.id) }
+                    }
+                    .disabled(model.mode != .normal)
+                    if model.aiConfig.preset.editableBaseURL {
+                        LabeledContent("Address") {
+                            TextField("", text: $model.aiConfig.baseURL, prompt: Text("https://example.com/v1"))
+                                .textFieldStyle(.roundedBorder)
+                                .multilineTextAlignment(.leading)
+                                .onSubmit { Task { await model.loadModels() } }
+                        }
+                        if model.aiConfig.base == nil, !model.aiConfig.baseURL.isEmpty {
+                            Text("Use an https address (plain http works only for this Mac).")
+                                .font(.footnote).foregroundStyle(Theme.Palette.labelRed)
+                        }
+                    }
                     if model.hasAIKey {
                         LabeledContent("API Key") {
                             HStack {
@@ -64,9 +81,9 @@ private struct ShelfKeeperSettingsTab: View {
                             }
                         }
                     } else {
-                        LabeledContent("API Key") {
+                        LabeledContent(model.aiConfig.preset.needsKey ? "API Key" : "API Key (optional)") {
                             HStack {
-                                SecureField("", text: $keyDraft, prompt: Text("sk-ant-…"))
+                                SecureField("", text: $keyDraft, prompt: Text("Paste a key from any service"))
                                     .textFieldStyle(.roundedBorder)
                                     .multilineTextAlignment(.leading)
                                     .frame(minWidth: 260)
@@ -76,9 +93,38 @@ private struct ShelfKeeperSettingsTab: View {
                             }
                         }
                     }
-                    Link("Get a key at console.anthropic.com", destination: URL(string: "https://console.anthropic.com/")!)
-                        .font(.footnote)
-                    Text("When you ask for notes on a game, a summary of that game's save files (save names, dates, party, quests and recent conversations) is sent to Anthropic's API using your key. Nothing is sent until you press Write Notes.")
+                    LabeledContent("Model") {
+                        HStack {
+                            TextField("", text: $model.aiConfig.model, prompt: Text("model name"))
+                                .textFieldStyle(.roundedBorder)
+                                .multilineTextAlignment(.leading)
+                            Menu("Choose…") {
+                                ForEach(model.availableModels, id: \.self) { id in
+                                    Button(id) { model.aiConfig.model = id }
+                                }
+                            }
+                            .fixedSize()
+                            .disabled(model.availableModels.isEmpty)
+                            Button {
+                                Task { await model.loadModels() }
+                            } label: { Image(systemName: "arrow.clockwise") }
+                            .help("Ask the service for its model list")
+                            .disabled(model.mode != .normal || (model.aiConfig.preset.needsKey && !model.hasAIKey))
+                        }
+                    }
+                    switch model.modelsState {
+                    case .loading(let text): Text(text).font(.footnote).foregroundStyle(.secondary)
+                    case .failed(let text): Text(text).font(.footnote).foregroundStyle(Theme.Palette.labelRed)
+                    case .idle:
+                        if !model.availableModels.isEmpty {
+                            Text("\(model.availableModels.count) models available from \(model.aiConfig.preset.name).")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                    if let keyURL = model.aiConfig.preset.keyURL, let url = URL(string: keyURL) {
+                        Link("Get a key for \(model.aiConfig.preset.name)", destination: url).font(.footnote)
+                    }
+                    Text("Paste a key and the service is recognised from it where possible. When you ask for notes on a game, a summary of that game's save files (save names, dates, party, quests and recent conversations) is sent to the service you chose, using your key. Nothing is sent until you press Write Notes.")
                         .font(.footnote).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

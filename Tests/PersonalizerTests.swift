@@ -370,3 +370,106 @@ final class ShelfKeeperAITests: XCTestCase {
         XCTAssertFalse(KeeperText.message(for: PersonalizerError.corrupt("x")).contains("x"))
     }
 }
+
+final class AIProviderTests: XCTestCase {
+    static let digest = GameDigest(history: "H", latest: "L", fingerprint: "3:100", saveCount: 3)
+
+    func testKeyPrefixDetection() {
+        XCTAssertEqual(AIProviders.detect(fromKey: "sk-ant-api03-abc")?.id, "anthropic")
+        XCTAssertEqual(AIProviders.detect(fromKey: "sk-or-v1-abc")?.id, "openrouter")
+        XCTAssertEqual(AIProviders.detect(fromKey: "sk-proj-abc")?.id, "openai")
+        XCTAssertEqual(AIProviders.detect(fromKey: "  sk-abc ")?.id, "openai")
+        XCTAssertEqual(AIProviders.detect(fromKey: "gsk_abc")?.id, "groq")
+        XCTAssertEqual(AIProviders.detect(fromKey: "xai-abc")?.id, "xai")
+        XCTAssertEqual(AIProviders.detect(fromKey: "AIzaSyAbc")?.id, "gemini")
+        XCTAssertNil(AIProviders.detect(fromKey: "0123456789abcdef"))
+    }
+
+    func testBaseURLValidation() {
+        XCTAssertNotNil(AIConfig(providerID: "custom", baseURL: "https://example.com/v1/", model: "m").base)
+        XCTAssertEqual(AIConfig(providerID: "custom", baseURL: "https://example.com/v1/", model: "m").base?.absoluteString, "https://example.com/v1")
+        XCTAssertNotNil(AIConfig(preset: AIProviders.preset("ollama")).base)                         // http to this Mac
+        XCTAssertNil(AIConfig(providerID: "custom", baseURL: "http://example.com/v1", model: "m").base)   // plain http elsewhere
+        XCTAssertNil(AIConfig(providerID: "custom", baseURL: "not a url", model: "m").base)
+        XCTAssertEqual(AIConfig(providerID: "groq", baseURL: "x", model: "llama").contentProviderID, "ai.groq.llama")
+    }
+
+    func testChatRequestShape() throws {
+        let config = AIConfig(providerID: "openai", baseURL: "https://api.openai.com/v1", model: "some-model")
+        let r = try ShelfKeeperAI.makeChatRequest(game: "G", digest: Self.digest, key: "k", config: config, jsonMode: true)
+        XCTAssertEqual(r.url?.absoluteString, "https://api.openai.com/v1/chat/completions")
+        XCTAssertEqual(r.value(forHTTPHeaderField: "Authorization"), "Bearer k")
+        XCTAssertNil(r.value(forHTTPHeaderField: "x-api-key"))
+        let obj = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(r.httpBody)) as? [String: Any])
+        XCTAssertEqual(obj["model"] as? String, "some-model")
+        XCTAssertEqual((obj["response_format"] as? [String: Any])?["type"] as? String, "json_object")
+        for absent in ["max_tokens", "temperature", "fallbacks", "output_config"] { XCTAssertNil(obj[absent], absent) }
+        let messages = try XCTUnwrap(obj["messages"] as? [[String: Any]])
+        XCTAssertEqual(messages.map { $0["role"] as? String }, ["system", "user"])
+        XCTAssertTrue((messages[0]["content"] as? String ?? "").contains("single JSON object"))
+        let plain = try ShelfKeeperAI.makeChatRequest(game: "G", digest: Self.digest, key: "", config: AIConfig(preset: AIProviders.preset("ollama")).with(model: "llama"), jsonMode: false)
+        XCTAssertNil(plain.value(forHTTPHeaderField: "Authorization"))            // keyless local server
+        XCTAssertNil((try JSONSerialization.jsonObject(with: try XCTUnwrap(plain.httpBody)) as? [String: Any])?["response_format"])
+        XCTAssertThrowsError(try ShelfKeeperAI.makeChatRequest(game: "G", digest: Self.digest, key: "k", config: AIConfig(preset: AIProviders.preset("openai")), jsonMode: true)) {
+            XCTAssertEqual($0 as? KeeperError, .notConfigured)                    // no model chosen yet
+        }
+    }
+
+    func testChatParsing() throws {
+        let notes = #"{"tagline":"T","blurb":"B","observations":["one"," ","two"],"playstyle":"P"}"#
+        func reply(_ content: Any, finish: String = "stop") throws -> Data {
+            try JSONSerialization.data(withJSONObject: ["choices": [["finish_reason": finish, "message": ["role": "assistant", "content": content]]]])
+        }
+        XCTAssertEqual(try ShelfKeeperAI.parseChat(reply(notes), status: 200).observations, ["one", "two"])
+        // Wrapped in prose and a code fence, as weaker models do.
+        XCTAssertEqual(try ShelfKeeperAI.parseChat(reply("Sure!\n```json\n\(notes)\n```"), status: 200).tagline, "T")
+        // Content as an array of parts.
+        XCTAssertEqual(try ShelfKeeperAI.parseChat(reply([["type": "text", "text": notes]]), status: 200).playstyle, "P")
+        XCTAssertThrowsError(try ShelfKeeperAI.parseChat(reply("{", finish: "length"), status: 200)) { XCTAssertEqual($0 as? KeeperError, .truncated) }
+        XCTAssertThrowsError(try ShelfKeeperAI.parseChat(reply("", finish: "content_filter"), status: 200)) { XCTAssertEqual($0 as? KeeperError, .refused) }
+        XCTAssertThrowsError(try ShelfKeeperAI.parseChat(reply("no json here"), status: 200)) { XCTAssertEqual($0 as? KeeperError, .malformed) }
+        XCTAssertThrowsError(try ShelfKeeperAI.parseChat(Data(#"{"error":{"message":"bad model"}}"#.utf8), status: 404)) { XCTAssertEqual($0 as? KeeperError, .http(404, "bad model")) }
+        XCTAssertThrowsError(try ShelfKeeperAI.parseChat(Data(#"{"error":"nope"}"#.utf8), status: 400)) { XCTAssertEqual($0 as? KeeperError, .http(400, "nope")) }
+        XCTAssertThrowsError(try ShelfKeeperAI.parseChat(Data(), status: 403)) { XCTAssertEqual($0 as? KeeperError, .invalidKey) }
+    }
+
+    func testModelsRequestAndParsing() throws {
+        let openai = try ShelfKeeperAI.makeModelsRequest(key: "k", config: AIConfig(preset: AIProviders.preset("openai")))
+        XCTAssertEqual(openai.url?.absoluteString, "https://api.openai.com/v1/models")
+        XCTAssertEqual(openai.value(forHTTPHeaderField: "Authorization"), "Bearer k")
+        let anthropic = try ShelfKeeperAI.makeModelsRequest(key: "k", config: .default)
+        XCTAssertEqual(anthropic.url?.absoluteString, "https://api.anthropic.com/v1/models")
+        XCTAssertEqual(anthropic.value(forHTTPHeaderField: "x-api-key"), "k")
+        XCTAssertEqual(anthropic.value(forHTTPHeaderField: "anthropic-version"), "2023-06-01")
+        let body = Data(#"{"data":[{"id":"models/zeta"},{"id":"alpha-10"},{"id":"alpha-2"},{"id":"alpha-2"}]}"#.utf8)
+        XCTAssertEqual(try ShelfKeeperAI.parseModels(body, status: 200), ["alpha-2", "alpha-10", "zeta"])
+        XCTAssertThrowsError(try ShelfKeeperAI.parseModels(Data(), status: 401)) { XCTAssertEqual($0 as? KeeperError, .invalidKey) }
+    }
+
+    func testAnthropicFeatureGatingByModel() throws {
+        func body(_ model: String) throws -> [String: Any] {
+            try XCTUnwrap(JSONSerialization.jsonObject(with: ShelfKeeperAI.requestBody(game: "G", digest: Self.digest, model: model)) as? [String: Any])
+        }
+        let opus = try body("claude-opus-5-5")
+        XCTAssertEqual(opus["fallbacks"] as? String, "default")
+        XCTAssertEqual((opus["output_config"] as? [String: Any])?["effort"] as? String, "medium")
+        let haiku = try body("claude-haiku-4-5")
+        XCTAssertNil(haiku["fallbacks"])
+        XCTAssertNil((haiku["output_config"] as? [String: Any])?["effort"])
+        XCTAssertNotNil((haiku["output_config"] as? [String: Any])?["format"])
+        let r = try ShelfKeeperAI.makeRequest(game: "G", digest: Self.digest, key: "k", model: "claude-haiku-4-5")
+        XCTAssertNil(r.value(forHTTPHeaderField: "anthropic-beta"))
+    }
+
+    func testAIWrittenRecognisesBothProviderIDStyles() {
+        func content(_ id: String) -> BackOfBoxContent { BackOfBoxContent(blurb: "b", tagline: "t", providerID: id, inputFingerprint: "3:1", generatedAt: Date()) }
+        XCTAssertTrue(content("anthropic.claude-opus-5-5").isAIWritten)
+        XCTAssertTrue(content("ai.groq.llama").isAIWritten)
+        XCTAssertFalse(content("local.v1").isAIWritten)
+    }
+}
+
+private extension AIConfig {
+    func with(model: String) -> AIConfig { var c = self; c.model = model; return c }
+}
+

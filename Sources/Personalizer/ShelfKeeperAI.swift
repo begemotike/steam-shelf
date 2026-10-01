@@ -9,20 +9,21 @@ struct KeeperNotes: Codable, Sendable, Equatable {
 }
 
 enum KeeperError: Error, Equatable {
-    case refused, truncated, invalidKey, rateLimited, overloaded, network, malformed
+    case refused, truncated, invalidKey, rateLimited, overloaded, network, malformed, notConfigured
     case http(Int, String?)
 
     var userMessage: String {
         switch self {
         case .refused: "The model declined to write about this one."
         case .truncated: "The notes ran too long and were cut off. Try again."
-        case .invalidKey: "Anthropic rejected the API key. Check it in Settings."
-        case .rateLimited: "Anthropic is rate-limiting this key. Try again in a minute."
-        case .overloaded: "Anthropic is busy right now. Try again shortly."
-        case .network: "Couldn't reach Anthropic. Check your connection."
-        case .malformed: "The Shelf-Keeper's reply wasn't readable. Try again."
+        case .invalidKey: "The AI service rejected the API key. Check it in Settings."
+        case .rateLimited: "The AI service is rate-limiting this key. Try again in a minute."
+        case .overloaded: "The AI service is busy right now. Try again shortly."
+        case .network: "Couldn't reach the AI service. Check your connection and the address in Settings."
+        case .malformed: "The Shelf-Keeper's reply wasn't readable. Try again, or pick a more capable model."
+        case .notConfigured: "Choose an AI service and a model in Settings first."
         case .http(let status, let message):
-            if let message, !message.isEmpty { "Anthropic returned an error (\(status)): \(message)" } else { "Anthropic returned an error (\(status))." }
+            if let message, !message.isEmpty { "The AI service returned an error (\(status)): \(message)" } else { "The AI service returned an error (\(status))." }
         }
     }
 }
@@ -66,31 +67,67 @@ actor ShelfKeeperAI {
         session = URLSession(configuration: .ephemeral)
     }
 
-    func notes(game: String, digest: GameDigest, key: String) async throws -> KeeperNotes {
-        let request = try Self.makeRequest(game: game, digest: digest, key: key)
+    func notes(game: String, digest: GameDigest, key: String, config: AIConfig = .default) async throws -> KeeperNotes {
+        guard !config.model.isEmpty, config.base != nil else { throw KeeperError.notConfigured }
+        switch config.wire {
+        case .anthropic:
+            let request = try Self.makeRequest(game: game, digest: digest, key: key, model: config.model)
+            let (data, status) = try await send(request)
+            return try Self.parse(data, status: status)
+        case .openAICompatible:
+            let request = try Self.makeChatRequest(game: game, digest: digest, key: key, config: config, jsonMode: true)
+            var (data, status) = try await send(request)
+            if status == 400 || status == 422 {
+                // Some compatible servers reject `response_format`; the prompt alone still asks for JSON.
+                let plain = try Self.makeChatRequest(game: game, digest: digest, key: key, config: config, jsonMode: false)
+                (data, status) = try await send(plain)
+            }
+            return try Self.parseChat(data, status: status)
+        }
+    }
+
+    /// Model ids the service offers, for the picker in Settings.
+    func models(key: String, config: AIConfig) async throws -> [String] {
+        let request = try Self.makeModelsRequest(key: key, config: config)
+        let (data, status) = try await send(request)
+        return try Self.parseModels(data, status: status)
+    }
+
+    private func send(_ request: URLRequest) async throws -> (Data, Int) {
         let data: Data, response: URLResponse
         do { (data, response) = try await session.data(for: request) }
         catch is CancellationError { throw CancellationError() }
         catch let error as URLError where error.code == .cancelled { throw CancellationError() }
         catch is URLError { throw KeeperError.network }
         guard let status = (response as? HTTPURLResponse)?.statusCode else { throw KeeperError.network }
-        return try Self.parse(data, status: status)
+        return (data, status)
     }
 
     // MARK: Pure helpers
 
-    static func makeRequest(game: String, digest: GameDigest, key: String) throws -> URLRequest {
+    static func makeRequest(game: String, digest: GameDigest, key: String, model: String = ShelfKeeperAI.model) throws -> URLRequest {
         var request = URLRequest(url: endpoint, timeoutInterval: 180)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.setValue(key, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.setValue("server-side-fallback-2026-07-01", forHTTPHeaderField: "anthropic-beta")
-        request.httpBody = try requestBody(game: game, digest: digest)
+        if supportsDefaultFallbacks(model) { request.setValue("server-side-fallback-2026-07-01", forHTTPHeaderField: "anthropic-beta") }
+        request.httpBody = try requestBody(game: game, digest: digest, model: model)
         return request
     }
 
-    static func requestBody(game: String, digest: GameDigest) throws -> Data {
+    /// `fallbacks: "default"` exists on the current top models only.
+    static func supportsDefaultFallbacks(_ model: String) -> Bool {
+        ["claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5"].contains(model)
+    }
+
+    /// `output_config.effort` is rejected by older and smaller models (Haiku 4.5, Sonnet 4.5 and earlier).
+    static func supportsEffort(_ model: String) -> Bool {
+        ["claude-opus-5", "claude-sonnet-5", "claude-fable-5", "claude-mythos-5", "claude-opus-4-6", "claude-opus-4-7",
+         "claude-opus-4-8", "claude-sonnet-4-6"].contains { model.hasPrefix($0) }
+    }
+
+    static func requestBody(game: String, digest: GameDigest, model: String = ShelfKeeperAI.model) throws -> Data {
         let schema: [String: Any] = [
             "type": "object",
             "additionalProperties": false,
@@ -102,17 +139,16 @@ actor ShelfKeeperAI {
                 "playstyle": ["type": "string"],
             ] as [String: Any],
         ]
-        let body: [String: Any] = [
+        var outputConfig: [String: Any] = ["format": ["type": "json_schema", "schema": schema] as [String: Any]]
+        if supportsEffort(model) { outputConfig["effort"] = "medium" }
+        var body: [String: Any] = [
             "model": model,
             "max_tokens": 16000,
-            "fallbacks": "default",
-            "output_config": [
-                "effort": "medium",
-                "format": ["type": "json_schema", "schema": schema] as [String: Any],
-            ] as [String: Any],
+            "output_config": outputConfig,
             "system": systemPrompt,
             "messages": [["role": "user", "content": userPrompt(game: game, digest: digest)]],
         ]
+        if supportsDefaultFallbacks(model) { body["fallbacks"] = "default" }
         return try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys, .withoutEscapingSlashes])
     }
 
@@ -146,5 +182,103 @@ actor ShelfKeeperAI {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         return notes
+    }
+
+    // MARK: OpenAI-compatible chat completions (OpenAI, Gemini, OpenRouter, Groq, Mistral, xAI, Ollama, custom)
+
+    /// Appended to the system prompt for services without schema-constrained output.
+    static let jsonInstruction = " Reply with a single JSON object and nothing else, with exactly these keys: "
+        + "\"tagline\" (string), \"blurb\" (string), \"observations\" (array of strings), \"playstyle\" (string)."
+
+    private static func authorize(_ request: inout URLRequest, key: String, wire: AIWire) {
+        switch wire {
+        case .anthropic:
+            request.setValue(key, forHTTPHeaderField: "x-api-key")
+            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        case .openAICompatible:
+            if !key.isEmpty { request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+        }
+    }
+
+    static func makeChatRequest(game: String, digest: GameDigest, key: String, config: AIConfig, jsonMode: Bool) throws -> URLRequest {
+        guard let base = config.base, !config.model.isEmpty else { throw KeeperError.notConfigured }
+        var request = URLRequest(url: base.appending(path: "chat/completions"), timeoutInterval: 180)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        authorize(&request, key: key, wire: .openAICompatible)
+        // No max-token or sampling fields: their names and limits differ between services.
+        var body: [String: Any] = [
+            "model": config.model,
+            "messages": [
+                ["role": "system", "content": systemPrompt + jsonInstruction],
+                ["role": "user", "content": userPrompt(game: game, digest: digest)],
+            ],
+        ]
+        if jsonMode { body["response_format"] = ["type": "json_object"] }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys, .withoutEscapingSlashes])
+        return request
+    }
+
+    static func parseChat(_ data: Data, status: Int) throws -> KeeperNotes {
+        try throwIfHTTPError(data, status: status)
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let choice = (root["choices"] as? [[String: Any]])?.first else { throw KeeperError.malformed }
+        switch choice["finish_reason"] as? String {
+        case "length": throw KeeperError.truncated
+        case "content_filter": throw KeeperError.refused
+        default: break
+        }
+        let message = choice["message"] as? [String: Any]
+        let text: String
+        if let s = message?["content"] as? String { text = s }
+        else if let parts = message?["content"] as? [[String: Any]] { text = parts.compactMap { $0["text"] as? String }.joined() }
+        else if message?["refusal"] is String { throw KeeperError.refused }
+        else { throw KeeperError.malformed }
+        return try decodeNotes(fromText: text)
+    }
+
+    /// Finds the JSON object in a reply that may be wrapped in prose or a code fence.
+    static func decodeNotes(fromText text: String) throws -> KeeperNotes {
+        guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}"), start < end,
+              let json = String(text[start...end]).data(using: .utf8),
+              var notes = try? JSONDecoder().decode(KeeperNotes.self, from: json) else { throw KeeperError.malformed }
+        notes.tagline = notes.tagline.trimmingCharacters(in: .whitespacesAndNewlines)
+        notes.blurb = notes.blurb.trimmingCharacters(in: .whitespacesAndNewlines)
+        notes.playstyle = notes.playstyle.trimmingCharacters(in: .whitespacesAndNewlines)
+        notes.observations = notes.observations.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard !notes.blurb.isEmpty, !notes.observations.isEmpty else { throw KeeperError.malformed }
+        return notes
+    }
+
+    static func throwIfHTTPError(_ data: Data, status: Int) throws {
+        guard !(200..<300).contains(status) else { return }
+        switch status {
+        case 401, 403: throw KeeperError.invalidKey
+        case 429: throw KeeperError.rateLimited
+        case 529, 500...599: throw KeeperError.overloaded
+        default:
+            let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            let message = (root?["error"] as? [String: Any])?["message"] as? String ?? root?["error"] as? String ?? root?["message"] as? String
+            throw KeeperError.http(status, message)
+        }
+    }
+
+    // MARK: Model list
+
+    static func makeModelsRequest(key: String, config: AIConfig) throws -> URLRequest {
+        guard let base = config.base else { throw KeeperError.notConfigured }
+        var request = URLRequest(url: base.appending(path: "models"), timeoutInterval: 30)
+        request.httpMethod = "GET"
+        authorize(&request, key: key, wire: config.wire)
+        return request
+    }
+
+    /// Both wire formats answer `{"data": [{"id": …}, …]}`; ids are returned sorted, without a `models/` prefix.
+    static func parseModels(_ data: Data, status: Int) throws -> [String] {
+        try throwIfHTTPError(data, status: status)
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let list = root["data"] as? [[String: Any]] else { throw KeeperError.malformed }
+        let ids = list.compactMap { $0["id"] as? String }.map { $0.hasPrefix("models/") ? String($0.dropFirst(7)) : $0 }
+        return Array(Set(ids)).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 }

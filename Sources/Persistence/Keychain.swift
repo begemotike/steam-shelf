@@ -7,6 +7,10 @@ enum Keychain {
     static let service = "net.outofajam.SteamShelf"
     static let apiKeyAccount = "steam-web-api-key"
     static let aiKeyAccount = "anthropic-api-key"
+    /// One key per AI service; Anthropic keeps its original account name so existing keys carry over.
+    static func aiKeyAccount(for providerID: String) -> String {
+        providerID == "anthropic" ? aiKeyAccount : "ai-key-\(providerID)"
+    }
 
     private static func baseQuery(account: String) -> [String: Any] {
         [

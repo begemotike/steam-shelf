@@ -77,3 +77,12 @@ Each item is built with the **default** shown. Revisit any time; none block v1.
 - Notes can be written only on the local shelf outside demo (`canWriteNotes`); stored notes are shown read-only elsewhere. Rewrite/Clear are hidden when not writable. Clear asks for confirmation. A failed rewrite offers "Keep Old Notes".
 - The notes panel is 380 pt wide (editor is 340) so long text reads comfortably; the back-of-box blurb layout was left unchanged (5 lines, 0.7 scale), a 160-char blurb fits in 3 lines.
 - Debug-only `--demo-notes` seeds the first demo entry with sample notes; `--dump-digest <appid>` writes the digest (history + latest) to Caches/SteamShelf.
+
+## Any AI service (2026-10-01)
+- Shelf-Keeper notes work with any service. Two wire formats: Anthropic's Messages API, and OpenAI-compatible chat completions for everything else. Presets: Anthropic, OpenAI, Google Gemini (its OpenAI-compatible endpoint), OpenRouter, Groq, Mistral, xAI, Ollama on this Mac (no key), and Other with a custom address.
+- Pasting a key picks the service from its prefix (`sk-ant-`, `sk-or-`, `sk-proj-`/`sk-`, `gsk_`, `xai-`, `AIza`). Each service keeps its own key in the Keychain (`ai-key-<service>`; Anthropic keeps the original account so an existing key carries over).
+- No model names are hardcoded except Anthropic's default (`claude-opus-5-5`): the app asks the service for its model list (`GET <base>/models`) and the user picks, or types one.
+- Compatible services get JSON mode (`response_format: json_object`) plus a JSON instruction in the prompt; if a server rejects `response_format` (400/422) the request is retried without it, and the reply's JSON is pulled out of any surrounding prose. No max-token or sampling fields are sent because their names differ between services.
+- Anthropic-only features are gated by model: `fallbacks: "default"` and `effort` are omitted for models that reject them (for example Haiku 4.5).
+- Plain http is accepted only for localhost (ATS `NSAllowsLocalNetworking`); other addresses must be https.
+- Untested live: no keys for any service were available. Request and response handling are covered by offline tests only.

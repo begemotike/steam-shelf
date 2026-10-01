@@ -58,8 +58,8 @@ struct KeeperNotesPanel: View {
                 message("Steam Shelf needs to be shown your Steam folder before it can read your save files.")
                 Button("Grant Access…") { model.requestSaveAccess() }.buttonStyle(BrassPillButtonStyle())
                 Spacer(minLength: 0)
-            } else if !model.hasAIKey {
-                message("Add your Anthropic API key in Settings so the Shelf-Keeper can write.")
+            } else if !model.aiReady {
+                message("Choose an AI service in Settings so the Shelf-Keeper can write.")
                 Button("Open Settings") { openSettings() }.buttonStyle(BrassPillButtonStyle())
                 Spacer(minLength: 0)
             } else {
