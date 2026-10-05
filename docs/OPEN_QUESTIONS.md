@@ -86,3 +86,9 @@ Each item is built with the **default** shown. Revisit any time; none block v1.
 - Anthropic-only features are gated by model: `fallbacks: "default"` and `effort` are omitted for models that reject them (for example Haiku 4.5).
 - Plain http is accepted only for localhost (ATS `NSAllowsLocalNetworking`); other addresses must be https.
 - Untested live: no keys for any service were available. Request and response handling are covered by offline tests only.
+
+## Shelf-Keeper voice (2026-10-04)
+- The prompts were rewritten around comedy craft instead of adjectives: the log is the setup and the model writes the turn; second person; specifics over adjectives; deadpan; end on the punch; vary the shape; aim at choices, never the person. Five example lines from imaginary shelves set the register.
+- A `drafts` scratch pad (ten candidate jokes) is requested first in the schema and discarded by the app; the observations are the best of them rewritten. The summary is now a character reading with a verdict, not a recap.
+- Truth rules were tightened after a live run produced funny but wrong lines (calling a boss's name a typo, an invented duration, a misused count): numbers must come from the log or be the gap between two logged dates; player-typed words are played with as written, never explained; reread against the log before finishing.
+- Live-tested on Claude Opus 5.5 with real saves: all lines verified against the data. One run is about 12.6k input and 6k output tokens, roughly 17 cents and 40–70 seconds. Q22: default to Sonnet 5.5 for half the cost, or keep Opus? Default: Opus.

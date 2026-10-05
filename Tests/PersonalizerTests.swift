@@ -242,15 +242,17 @@ final class ShelfKeeperAITests: XCTestCase {
         XCTAssertEqual(format["type"] as? String, "json_schema")
         let schema = try XCTUnwrap(format["schema"] as? [String: Any])
         XCTAssertEqual(schema["additionalProperties"] as? Bool, false)
-        XCTAssertEqual(schema["required"] as? [String], ["tagline", "blurb", "observations", "playstyle"])
+        XCTAssertEqual(schema["required"] as? [String], ["drafts", "tagline", "blurb", "observations", "playstyle"])
         let props = try XCTUnwrap(schema["properties"] as? [String: Any])
-        XCTAssertEqual(Set(props.keys), ["tagline", "blurb", "observations", "playstyle"])
-        XCTAssertTrue((obj["system"] as? String ?? "").hasPrefix("You are the Shelf-Keeper, the dry, fond curator"))
+        XCTAssertEqual(Set(props.keys), ["drafts", "tagline", "blurb", "observations", "playstyle"])
+        let system = obj["system"] as? String ?? ""
+        XCTAssertTrue(system.hasPrefix("You are the Shelf-Keeper: the curator of a collector's wooden game shelf"))
+        for required in ["roast choices, never the person", "Truth rules", "Numbers are facts", "do not reuse the jokes"] { XCTAssertTrue(system.contains(required), required) }
         let messages = try XCTUnwrap(obj["messages"] as? [[String: Any]])
         XCTAssertEqual(messages.count, 1)
         XCTAssertEqual(messages[0]["role"] as? String, "user")
         let content = try XCTUnwrap(messages[0]["content"] as? String)
-        XCTAssertTrue(content.hasPrefix("Game: Baldur's Gate 3\n\n== SAVE HISTORY ==\nHISTORY-TEXT\n\n== MOST RECENT SAVE ==\nLATEST-TEXT\n\nWrite:\n- tagline:"))
+        XCTAssertTrue(content.hasPrefix("Game: Baldur's Gate 3\n\n== SAVE HISTORY ==\nHISTORY-TEXT\n\n== MOST RECENT SAVE ==\nLATEST-TEXT\n\nWrite:\n- drafts:"))
     }
 
     func testRequestHeadersAndURL() throws {

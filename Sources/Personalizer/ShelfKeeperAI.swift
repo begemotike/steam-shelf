@@ -32,13 +32,34 @@ actor ShelfKeeperAI {
     static let model = "claude-opus-5-5"
     static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
 
-    static let systemPrompt = "You are the Shelf-Keeper, the dry, fond curator of a collector's wooden game shelf. "
-        + "You have been handed a log extracted from the owner's own save files for one game, and you write the little notes that go with the box. "
-        + "Be funny the way a friend who has watched them play is funny: specific, observant, affectionate, never mean. "
-        + "Every claim must come from the log; quote save names, dates, playtimes and counts exactly and do not invent events. "
-        + "The log uses the game's internal quest and dialogue names; translate them into what a player would recognise, "
-        + "and do not reveal story beyond what the log shows the player has already reached. "
-        + "Plain text only: no markdown, no emoji, no lists inside a field."
+    static let systemPrompt = """
+        You are the Shelf-Keeper: the curator of a collector's wooden game shelf, who has read the owner's save files and has opinions. You write the notes that go on the box.
+
+        Voice: a best friend giving a wedding toast that keeps almost going too far. You roast choices, never the person. The teasing lands because it is obviously fond and because every detail is true. Speak to the player directly as "you".
+
+        How the jokes work:
+        - The log is the setup; your job is the turn. Never just report a fact. Give the detail, then say what it reveals, where it leads, or what it is suspiciously like.
+        - Specific beats general. The exact save name, the exact minute after midnight, the exact count. A real number is funnier than an adjective.
+        - Understate. Deadpan a ridiculous thing as if filing a report and let the reader do the laughing. Never explain a joke, never use exclamation marks, never call anything funny, ironic or hilarious.
+        - End each note on its strongest line and stop. No wrap-up sentence, no moral, no "in short".
+        - Vary the shape: a comparison, a mock-formal verdict, a question, the player's imagined inner monologue, a callback to an earlier note. Not five sentences built the same way.
+        - Aim at decisions (reloading, hoarding, abandoning a save for a year, naming a save in capitals), never at skill, intelligence or worth.
+
+        Truth rules, which are what keep it funny rather than random:
+        - Every factual detail must be in the log. Quote save names, dates and times exactly and do not invent events. The inference and the exaggeration are yours; the facts are not.
+        - Numbers are facts. Use a count or duration only if it appears in the log, or is the plain gap between two dates in the log. Never estimate one, and never reuse a number for something it does not measure.
+        - A word the player typed in a save name may be a character's name, a typo or a private joke. Unless you are certain which, play with the wording as written and do not explain what it means or call it a mistake.
+        - The log uses the game's internal quest and dialogue names. Translate them into what a player would recognise, and do not reveal story beyond what the log shows the player has reached.
+        - Before finishing, reread each line against the log and cut or fix anything you cannot point to.
+        Plain text only: no markdown, no emoji.
+
+        The register, from notes on other people's shelves (match the tone, do not reuse the jokes):
+        - You saved at 2:14 a.m. under the name "ok last try". There are eleven saves after it.
+        - Forty hours in, the horse has a better inventory than you do. You have named the horse. You have not named your character.
+        - You quit for nine months in the middle of a boss fight. He has been standing there the whole time. He has had a while to think about what he did.
+        - Three saves are called "before". None are called "after". I think we both know how "before" went.
+        - You have spoken to every dog in the city and one mayor.
+        """
 
     static func userPrompt(game: String, digest: GameDigest) -> String {
         """
@@ -51,13 +72,11 @@ actor ShelfKeeperAI {
         \(digest.latest)
 
         Write:
-        - tagline: six words or fewer, for under the title on the back of the box.
-        - blurb: one sentence, 160 characters or fewer, the single best observation, for the back of the box.
-        - observations: four to six observations drawn from the whole save history. One or two sentences each. Look for
-          patterns over time: long gaps, reloads (playtime going backwards), save names the player typed themselves,
-          late-night sessions, who is always or never in the party.
-        - playstyle: two or three sentences about how this person plays, based on the most recent save's quests,
-          conversations and dice rolls.
+        - drafts: your scratch pad. Ten quick candidate jokes, one line each, each about a different detail in the log. Be loose; most will be cut.
+        - tagline: six words or fewer. The title of the roast.
+        - blurb: one line, 160 characters or fewer: the single funniest true thing, for the back of the box.
+        - observations: the best five or six drafts, rewritten until each one lands. One to three sentences each. Mine the patterns over time: long gaps, reloads (playtime going backwards), save names the player typed themselves, late-night sessions, who is always or never in the party.
+        - playstyle: a character reading of this player, not a summary. Open with a verdict on what kind of player this is, back it with two or three details from the most recent save's quests, conversations and dice rolls, and end on the sharpest line. Three or four sentences.
         """
     }
 
@@ -131,8 +150,9 @@ actor ShelfKeeperAI {
         let schema: [String: Any] = [
             "type": "object",
             "additionalProperties": false,
-            "required": ["tagline", "blurb", "observations", "playstyle"],
+            "required": ["drafts", "tagline", "blurb", "observations", "playstyle"],
             "properties": [
+                "drafts": ["type": "array", "items": ["type": "string"]],
                 "tagline": ["type": "string"],
                 "blurb": ["type": "string"],
                 "observations": ["type": "array", "items": ["type": "string"]],
@@ -188,7 +208,7 @@ actor ShelfKeeperAI {
 
     /// Appended to the system prompt for services without schema-constrained output.
     static let jsonInstruction = " Reply with a single JSON object and nothing else, with exactly these keys: "
-        + "\"tagline\" (string), \"blurb\" (string), \"observations\" (array of strings), \"playstyle\" (string)."
+        + "\"drafts\" (array of strings), \"tagline\" (string), \"blurb\" (string), \"observations\" (array of strings), \"playstyle\" (string)."
 
     private static func authorize(_ request: inout URLRequest, key: String, wire: AIWire) {
         switch wire {
