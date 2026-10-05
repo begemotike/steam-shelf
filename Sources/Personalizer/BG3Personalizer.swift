@@ -60,6 +60,23 @@ struct BG3SaveRecord: Sendable, Equatable {
         return "\(m.1)h\(m.2)m"
     }
 
+    var playtimeMinutes: Int? {
+        guard let m = saveName.firstMatch(of: /(\d+)h (\d+)m/), let h = Int(m.1), let min = Int(m.2) else { return nil }
+        return h * 60 + min
+    }
+
+    /// "Putrid Bog" from a save the game named ("Putrid Bog - 17h 23m …"); nil for autosaves and free-form names.
+    var location: String? {
+        guard let m = saveName.firstMatch(of: /^(.+?) - \d+h \d+m/) else { return nil }
+        return String(m.1)
+    }
+
+    /// The player typed something: the name is not exactly the game's "<Place> - 17h 23m".
+    var isPlayerNamed: Bool { !isAutosave && saveName.wholeMatch(of: /^.+? - \d+h \d+m$/) == nil }
+
+    /// Companions by name, without the hero, custom characters or summons.
+    var companionNames: [String] { members.map(\.origin).filter { $0 != "Generic" && !$0.contains("_") && !$0.isEmpty } }
+
     var heroMember: BG3Member? { members.first { $0.origin == "Generic" } }
 
     var classText: String {
@@ -104,6 +121,67 @@ enum BG3Format {
 
     static func day(_ date: Date, timeZone: TimeZone) -> String { String(stamp(date, timeZone: timeZone).prefix(10)) }
 
+    /// Patterns counted by the app so the model never has to do arithmetic on the list (models miscount).
+    static func patterns(_ records: [BG3SaveRecord], timeZone: TimeZone = .current) -> [String] {
+        var out: [String] = []
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = timeZone
+        func clock(_ d: Date) -> String { String(stamp(d, timeZone: timeZone).suffix(5)) }
+        func span(_ minutes: Int) -> String { minutes >= 60 ? "\(minutes / 60)h \(minutes % 60)m" : "\(minutes) minutes" }
+
+        var heroes: [String] = []
+        for r in records where !heroes.contains(r.hero) { heroes.append(r.hero) }
+        for hero in heroes {
+            let own = records.filter { $0.hero == hero }
+            // Long absences and reloads, between consecutive saves of the same hero.
+            for (a, b) in zip(own, own.dropFirst()) {
+                let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: a.modified), to: calendar.startOfDay(for: b.modified)).day ?? 0
+                if days >= 30 {
+                    var line = "Gap: \(hero) went \(days) days between \"\(a.saveName)\" (\(day(a.modified, timeZone: timeZone))) and \"\(b.saveName)\" (\(day(b.modified, timeZone: timeZone)))"
+                    if let pa = a.playtimeMinutes, let pb = b.playtimeMinutes, pb >= pa { line += "; playtime advanced \(span(pb - pa)) across that gap" }
+                    out.append(line + ".")
+                }
+                if let pa = a.playtimeMinutes, let pb = b.playtimeMinutes, pb < pa {
+                    let apart = Int(b.modified.timeIntervalSince(a.modified) / 60)
+                    out.append("Reload: \(hero) saved \"\(a.saveName)\" at \(clock(a.modified)) on \(day(a.modified, timeZone: timeZone)), then \"\(b.saveName)\" \(span(max(apart, 0))) of real time later with \(span(pa - pb)) less playtime.")
+                }
+            }
+            // Where this hero saves most.
+            var byPlace: [String: Int] = [:]
+            for r in own { if let place = r.location { byPlace[place, default: 0] += 1 } }
+            let top = byPlace.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.prefix(5)
+            if !top.isEmpty { out.append("Saves by place for \(hero): " + top.map { "\($0.key) \($0.value)" }.joined(separator: ", ") + ".") }
+            // Who is in the party.
+            var present: [String: Int] = [:]
+            for r in own { for name in Set(r.companionNames) { present[name, default: 0] += 1 } }
+            if !present.isEmpty {
+                out.append("Party attendance for \(hero) (out of \(own.count) saves): "
+                    + present.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", ") + ".")
+            }
+            let summonSaves = own.filter { $0.partyText.contains("+quasit") }
+            if let firstQuasit = summonSaves.first {
+                out.append("The quasit first appears in \"\(firstQuasit.saveName)\" (\(day(firstQuasit.modified, timeZone: timeZone))) and is in \(summonSaves.count) of \(hero)'s \(own.count) saves.")
+            }
+        }
+        // Night owl.
+        let late = records.filter { (0..<5).contains(calendar.component(.hour, from: $0.modified)) }
+        if !late.isEmpty, let latest = late.max(by: { minutesPastMidnight($0.modified, calendar) < minutesPastMidnight($1.modified, calendar) }) {
+            out.append("Saves made between midnight and 5 a.m.: \(late.count) of \(records.count). The latest in the night was \"\(latest.saveName)\" at \(clock(latest.modified)).")
+        }
+        // Names the player typed.
+        let typed = records.filter(\.isPlayerNamed)
+        if !typed.isEmpty {
+            out.append("Save names the player typed themselves (\(typed.count)): "
+                + typed.suffix(30).map { "\"\($0.saveName)\" (\(stamp($0.modified, timeZone: timeZone)))" }.joined(separator: "; ") + ".")
+        }
+        let autos = records.filter(\.isAutosave).count
+        out.append("Autosaves: \(autos) of \(records.count) saves.")
+        return out
+    }
+
+    private static func minutesPastMidnight(_ date: Date, _ calendar: Calendar) -> Int {
+        calendar.component(.hour, from: date) * 60 + calendar.component(.minute, from: date)
+    }
+
     /// §4.1. `records` may be in any order; they are sorted by modification date.
     static func history(_ unsorted: [BG3SaveRecord], timeZone: TimeZone = .current) -> String {
         let records = unsorted.sorted { $0.modified < $1.modified }
@@ -135,6 +213,7 @@ enum BG3Format {
             "Heroes: \(heroes)",
             "First save: \(stamp(first.modified, timeZone: timeZone)); last save: \(stamp(last.modified, timeZone: timeZone))",
             "Total saves: \(records.count)",
+            "All clock times are in \(timeZone.identifier), the zone the owner says the saves were played in.",
             "Note: a lower playtime than the previous save by the same hero means the player reloaded an earlier save.",
             "Columns: date | hero | save name | playtime | hero class | party",
         ]
@@ -142,7 +221,8 @@ enum BG3Format {
             out.append("(Showing only the most recent \(maxHistoryLines) lines.)")
             lines = Array(lines.suffix(maxHistoryLines))
         }
-        return (out + [""] + lines).joined(separator: "\n")
+        let counted = ["", "COUNTED FOR YOU (use these figures; do not recount the list below):"] + patterns(records, timeZone: timeZone).map { "- " + $0 }
+        return (out + counted + ["", "FULL LIST:"] + lines).joined(separator: "\n")
     }
 
     // MARK: Latest save
@@ -312,7 +392,7 @@ struct BG3Personalizer: GamePersonalizer {
         return (name, name)
     }
 
-    func digest(steamRoot: URL) throws -> GameDigest? {
+    func digest(steamRoot: URL, timeZone: TimeZone = .current) throws -> GameDigest? {
         let fm = FileManager.default
         let userdata = steamRoot.appending(path: "userdata", directoryHint: .isDirectory)
         guard let users = try? fm.contentsOfDirectory(at: userdata, includingPropertiesForKeys: nil) else { return nil }
@@ -353,7 +433,7 @@ struct BG3Personalizer: GamePersonalizer {
             journal = BG3Journal.extract(from: roots)
         }
         return GameDigest(
-            history: BG3Format.history(records),
+            history: BG3Format.history(records, timeZone: timeZone),
             latest: BG3Format.latest(info: latest.info, hero: latest.found.hero, saveName: latest.name, journal: journal),
             fingerprint: BG3Format.fingerprint(saveCount: records.count, latest: latest.found.modified),
             saveCount: records.count)

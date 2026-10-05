@@ -14,7 +14,8 @@ protocol GamePersonalizer: Sendable {
     var appID: Int { get }
     var displayName: String { get }
     /// `nil` = no saves found. Runs synchronously; call it off the main actor.
-    func digest(steamRoot: URL) throws -> GameDigest?
+    /// `timeZone` is where the saves were played; file dates carry no zone, so a travelling Mac would shift every clock time.
+    func digest(steamRoot: URL, timeZone: TimeZone) throws -> GameDigest?
 }
 
 enum Personalizers {

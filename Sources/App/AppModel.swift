@@ -18,6 +18,7 @@ enum SlideDirection: Sendable { case forward, backward }
         static let hasAIKey = "hasAIKey"
         static let aiKeyProviders = "aiKeyProviders"
         static let aiConfig = "aiConfig"
+        static let saveTimeZone = "saveTimeZone"
         static let playerSummary = "playerSummary"
         static let shelfLights = "shelfLights"
     }
@@ -41,6 +42,11 @@ enum SlideDirection: Sendable { case forward, backward }
             if aiConfig.providerID != oldValue.providerID || aiConfig.baseURL != oldValue.baseURL { availableModels = []; modelsState = .idle }
         }
     }
+    /// Where the saves were played (nil = this Mac's current zone). Save files carry no zone of their own.
+    var saveTimeZoneID: String? {
+        didSet { if mode == .normal { UserDefaults.standard.set(saveTimeZoneID, forKey: DefaultsKey.saveTimeZone) } }
+    }
+    var saveTimeZone: TimeZone { saveTimeZoneID.flatMap(TimeZone.init(identifier:)) ?? .current }
     private(set) var availableModels: [String] = []
     private(set) var modelsState: LoadState = .idle
     var hasAIKey: Bool { aiKeyProviders.contains(aiConfig.providerID) }
@@ -120,6 +126,7 @@ enum SlideDirection: Sendable { case forward, backward }
             if defaults.bool(forKey: DefaultsKey.hasAIKey) { providers.insert("anthropic") }   // key saved before multi-service support
             aiKeyProviders = providers
             aiConfig = defaults.data(forKey: DefaultsKey.aiConfig).flatMap { try? JSONDecoder().decode(AIConfig.self, from: $0) } ?? .default
+            saveTimeZoneID = defaults.string(forKey: DefaultsKey.saveTimeZone)
             hasSaveAccess = SteamFolderAccess.isGranted
             playerSummary = defaults.data(forKey: DefaultsKey.playerSummary)
                 .flatMap { try? JSONDecoder().decode(PlayerSummary.self, from: $0) }
@@ -130,6 +137,7 @@ enum SlideDirection: Sendable { case forward, backward }
             hasAPIKey = false
             aiKeyProviders = []
             aiConfig = .default
+            saveTimeZoneID = nil
             hasSaveAccess = false
             playerSummary = nil
             source = DemoShelfSource()
@@ -661,10 +669,11 @@ enum SlideDirection: Sendable { case forward, backward }
         guard !key.isEmpty || !config.preset.needsKey else { keeperState[appID] = .failed(KeeperText.noKey); return }
 
         keeperState[appID] = .reading
+        let zone = saveTimeZone
         let digest: GameDigest
         do {
             let found = try await Task.detached(priority: .userInitiated) {
-                try SteamFolderAccess.withAccess { try personalizer.digest(steamRoot: $0) }
+                try SteamFolderAccess.withAccess { try personalizer.digest(steamRoot: $0, timeZone: zone) }
             }.value
             guard let found else { throw PersonalizerError.noSaves }
             digest = found
@@ -740,9 +749,10 @@ extension AppModel {
               let appID = Int(args[flag + 1]), let personalizer = Personalizers.forApp(appID) else { return }
         let log = Logger(subsystem: "net.outofajam.SteamShelf", category: "DumpDigest")
         guard hasSaveAccess else { log.error("--dump-digest: save access not granted"); return }
+        let zone = saveTimeZone
         do {
             let digest = try await Task.detached(priority: .userInitiated) {
-                try SteamFolderAccess.withAccess { try personalizer.digest(steamRoot: $0) }
+                try SteamFolderAccess.withAccess { try personalizer.digest(steamRoot: $0, timeZone: zone) }
             }.value
             guard let digest else { log.error("--dump-digest: no saves found"); return }
             let dir = try FileManager.default.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)

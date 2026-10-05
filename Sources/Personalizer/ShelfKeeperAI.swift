@@ -29,7 +29,7 @@ enum KeeperError: Error, Equatable {
 }
 
 actor ShelfKeeperAI {
-    static let model = "claude-opus-5-5"
+    static let model = "claude-sonnet-5-5"
     static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
 
     static let systemPrompt = """
@@ -47,7 +47,8 @@ actor ShelfKeeperAI {
 
         Truth rules, which are what keep it funny rather than random:
         - Every factual detail must be in the log. Quote save names, dates and times exactly and do not invent events. The inference and the exaggeration are yours; the facts are not.
-        - Numbers are facts. Use a count or duration only if it appears in the log, or is the plain gap between two dates in the log. Never estimate one, and never reuse a number for something it does not measure.
+        - Numbers are facts. The log has a section of figures already counted for you: use those. Do not count rows, add up saves or work out the minutes between two times yourself; if the figure you want is not given, say it without a number ("later that night", "again"). Never reuse a number for something it does not measure.
+        - Never show an internal identifier (anything with underscores, like a quest or dialogue code). Say what it is in a player's words.
         - A word the player typed in a save name may be a character's name, a typo or a private joke. Unless you are certain which, play with the wording as written and do not explain what it means or call it a mistake.
         - The log uses the game's internal quest and dialogue names. Translate them into what a player would recognise, and do not reveal story beyond what the log shows the player has reached.
         - Before finishing, reread each line against the log and cut or fix anything you cannot point to.

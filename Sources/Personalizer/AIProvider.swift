@@ -23,7 +23,7 @@ struct AIProviderPreset: Identifiable, Sendable, Equatable {
 enum AIProviders {
     static let all: [AIProviderPreset] = [
         .init(id: "anthropic", name: "Anthropic (Claude)", wire: .anthropic, baseURL: "https://api.anthropic.com/v1",
-              keyURL: "https://console.anthropic.com/", needsKey: true, defaultModel: "claude-opus-5-5",
+              keyURL: "https://console.anthropic.com/", needsKey: true, defaultModel: "claude-sonnet-5-5",
               keyPrefixes: ["sk-ant-"], editableBaseURL: false),
         .init(id: "openai", name: "OpenAI", wire: .openAICompatible, baseURL: "https://api.openai.com/v1",
               keyURL: "https://platform.openai.com/api-keys", needsKey: true, defaultModel: nil,

@@ -55,6 +55,15 @@ private struct ShelfKeeperSettingsTab: View {
                     }
                     Text("Saves live inside the Steam folder, which macOS keeps private until you choose it.")
                         .font(.footnote).foregroundStyle(.secondary)
+                    Picker("Saves were played in", selection: $model.saveTimeZoneID) {
+                        Text("This Mac's time zone (\(TimeZone.current.identifier))").tag(String?.none)
+                        Divider()
+                        ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag(String?.some($0)) }
+                    }
+                    .disabled(model.mode != .normal)
+                    Text("Save files don't record a time zone. If you play at home and travel with this Mac, pick your home zone so late-night saves stay late.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Section("AI service") {
                     Picker("Service", selection: Binding(get: { model.aiConfig.providerID }, set: { model.selectAIProvider($0) })) {

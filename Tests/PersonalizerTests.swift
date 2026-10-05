@@ -122,6 +122,32 @@ final class BG3PersonalizerTests: XCTestCase {
                       members: party ?? [member("Generic", "Ranger", "BeastMaster", level: 4), member("Gale"), member("Karlach")])
     }
 
+    func testCountedPatterns() {
+        let gale = [Self.member("Generic", "Ranger", "BeastMaster", level: 4), Self.member("Gale")]
+        let records = [
+            Self.record("2024-02-05T21:19:00Z", "Putrid Bog - 17h 23m Astarion questions", party: gale),
+            Self.record("2024-02-05T21:40:00Z", "Putrid Bog - 17h 17m new attempt", party: gale),           // reload: 6 minutes less, 21 minutes later
+            Self.record("2024-02-25T18:41:00Z", "Shattered Sanctum - 22h 35m"),
+            Self.record("2025-01-18T02:11:00Z", "Campsite - 22h 45m"),                                    // 328 days later, after midnight UTC
+            Self.record("2025-01-18T02:30:00Z", "AutoSave_9"),
+        ]
+        let lines = BG3Format.patterns(records, timeZone: Self.utc)
+        func has(_ text: String) -> Bool { lines.contains { $0.contains(text) } }
+        XCTAssertTrue(has("Reload: Corth saved \"Putrid Bog - 17h 23m Astarion questions\" at 21:19 on 2024-02-05, then \"Putrid Bog - 17h 17m new attempt\" 21 minutes of real time later with 6 minutes less playtime."))
+        XCTAssertTrue(has("Gap: Corth went 328 days between \"Shattered Sanctum - 22h 35m\" (2024-02-25) and \"Campsite - 22h 45m\" (2025-01-18); playtime advanced 10 minutes across that gap."))
+        XCTAssertTrue(has("Saves by place for Corth: Putrid Bog 2, Campsite 1, Shattered Sanctum 1."))
+        XCTAssertTrue(has("Party attendance for Corth (out of 5 saves): Gale 5, Karlach 3."))
+        XCTAssertTrue(has("Saves made between midnight and 5 a.m.: 2 of 5. The latest in the night was \"AutoSave_9\" at 02:30."))
+        XCTAssertTrue(has("Save names the player typed themselves (2):"))
+        XCTAssertTrue(has("Autosaves: 1 of 5 saves."))
+        // The zone moves the clock: the same saves seen from Honolulu are not after midnight.
+        let hawaii = BG3Format.patterns(records, timeZone: TimeZone(identifier: "Pacific/Honolulu") ?? Self.utc)
+        XCTAssertFalse(hawaii.contains { $0.contains("midnight and 5 a.m.") })
+        let text = BG3Format.history(records, timeZone: Self.utc)
+        XCTAssertTrue(text.contains("All clock times are in \(Self.utc.identifier)"))
+        XCTAssertTrue(text.contains("COUNTED FOR YOU"))
+    }
+
     /// Builds `<root>/userdata/1234/1086940/remote/_SAVE_Public/Savegames/Story/Corth-123__<name>/<name>.lsv` from the fixture.
     func makeSteamRoot() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appending(path: "steamroot-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -232,7 +258,7 @@ final class ShelfKeeperAITests: XCTestCase {
 
     func testRequestBodyShape() throws {
         let (raw, obj) = try body()
-        XCTAssertEqual(obj["model"] as? String, "claude-opus-5-5")
+        XCTAssertEqual(obj["model"] as? String, "claude-sonnet-5-5")   // the default writer
         XCTAssertTrue(raw.contains("\"fallbacks\":\"default\""))
         XCTAssertEqual(obj["max_tokens"] as? Int, 16000)
         for forbidden in ["thinking", "temperature", "top_p", "top_k"] { XCTAssertNil(obj[forbidden], forbidden) }
