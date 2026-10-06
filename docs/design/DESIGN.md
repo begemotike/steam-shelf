@@ -1,5 +1,12 @@
 # Steam Shelf — Visual & Interaction Design
 
+> **Status (2026-10-05).** This is the original visual spec and most of it is still what the app does. Sections
+> superseded by later decisions carry a pointer note: §4 (bookcase geometry), §6 (handle placement) and §10 (header
+> bar) were replaced by the full-bleed case (`../history/PHASE_C-full-bleed-case.md`); boxes now stand behind the
+> plank's front edge; shelf lights, drag-to-reorder, Play/Install and the Shelf-Keeper notes panel were added later
+> and are described in `../architecture/`. Where this page and the code differ, the code is right.
+
+
 Mood: a walnut bookcase in a dim den, lit by a warm lamp above and to the left of the viewer. Reference points: Delicious Library 1/2 (2005–08), iBooks wooden shelf (2010), iTunes 7 Cover Flow (2006). Rich, glossy, tactile, slightly over-the-top. No Liquid Glass, no SF Symbols in the shelf chrome (SF Symbols are fine inside Settings).
 
 All sizes below are **design units (du)**. On screen, `pt = du × scale`, where `scale = min(availableWidth / 1100, availableHeight / 1000)` for the bookcase block (see §4). Colors are sRGB hex.

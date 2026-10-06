@@ -26,6 +26,9 @@ import UniformTypeIdentifiers
     var body: some Scene {
         Window("Steam Shelf", id: "shelf") {
             ShelfView().environment(appModel)
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                    appModel.saveNow()
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: Theme.Metrics.windowDefaultW, height: Theme.Metrics.windowDefaultH)

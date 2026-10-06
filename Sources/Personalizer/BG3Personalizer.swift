@@ -1,6 +1,6 @@
 import Foundation
 
-// Baldur's Gate 3 personalizer (docs/PERSONALIZER.md §4). The text formatting is pure: it takes plain structs, so it
+// Baldur's Gate 3 personalizer (docs/history/PERSONALIZER-spec.md §4). The text formatting is pure: it takes plain structs, so it
 // is unit-testable without files. File reading and LSF extraction sit at the bottom.
 
 struct BG3Member: Sendable, Equatable {

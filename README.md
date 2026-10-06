@@ -14,6 +14,12 @@ played, achievements and a note.
 
 Updates arrive automatically (checked once a day) or via **Steam Shelf ▸ Check for Updates…**.
 
+## Documentation
+
+Everything about the design, decisions and structure of the app is under [docs/](docs/README.md): a product
+overview, one architecture page per subsystem, a reference page per source file, the visual spec, and the
+decision log.
+
 ## Develop
 
 ```bash

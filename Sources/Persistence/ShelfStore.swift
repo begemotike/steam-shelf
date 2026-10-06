@@ -43,6 +43,17 @@ import SwiftData
         return try ShelfDocumentCodec.decode(record.documentData)
     }
 
+    /// Copies the stored (unreadable) document bytes to `Application Support/SteamShelf/unreadable-shelf-<date>.json`.
+    func backUpUnreadableRecord() -> URL? {
+        guard let record = try? localRecord(),
+              let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        let dir = base.appending(path: "SteamShelf", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+        let url = dir.appending(path: "unreadable-shelf-\(stamp).json")
+        return (try? record.documentData.write(to: url, options: .atomic)) == nil ? nil : url
+    }
+
     func save(_ document: ShelfDocument) throws {
         let data = try ShelfDocumentCodec.encode(document)
         if let record = try localRecord() {

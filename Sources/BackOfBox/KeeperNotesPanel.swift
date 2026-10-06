@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The Shelf-Keeper's notes: same slot and style as `LabelEditorPanel` (cream parchment, brass clip, trailing edge).
-/// Which body shows depends on the model state (docs/PERSONALIZER.md §7).
+/// Which body shows depends on the model state (docs/history/PERSONALIZER-spec.md §7).
 struct KeeperNotesPanel: View {
     let appID: Int
     @Environment(AppModel.self) private var model

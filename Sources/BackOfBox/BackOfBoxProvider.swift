@@ -57,7 +57,7 @@ struct BackOfBoxContent: Codable, Sendable, Equatable {
     var providerID: String
     var inputFingerprint: String
     var generatedAt: Date
-    /// Shelf-Keeper notes (docs/PERSONALIZER.md §6); absent in older documents.
+    /// Shelf-Keeper notes (docs/history/PERSONALIZER-spec.md §6); absent in older documents.
     var observations: [String]?
     var detail: String?
 

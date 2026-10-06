@@ -1,6 +1,6 @@
 import Foundation
 
-/// What the Shelf-Keeper writes for one game (docs/PERSONALIZER.md §5).
+/// What the Shelf-Keeper writes for one game (docs/history/PERSONALIZER-spec.md §5).
 struct KeeperNotes: Codable, Sendable, Equatable {
     var tagline: String        // ≤ 6 words, for the back of the box under the title
     var blurb: String          // ≤ 160 characters, one line for the back of the box

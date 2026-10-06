@@ -153,10 +153,15 @@ enum SlideDirection: Sendable { case forward, backward }
         await dumpDigestIfRequested()
         #endif
         guard mode == .normal, !isDemo else { return }
-        if let doc = try? source.load() {
-            document = doc
-        } else {
+        do {
+            if let doc = try source.load() { document = doc; lastSavedAt = doc.updatedAt }
+            else { document = ShelfDocument.empty(owner: ownerFromState()) }
+        } catch {
+            // Never silently replace a shelf that exists but cannot be read: keep its bytes next to the store.
+            Self.log.error("Stored shelf could not be read: \(String(describing: error), privacy: .public)")
+            let backup = (source as? LocalShelfSource)?.backUpUnreadableRecord()
             document = ShelfDocument.empty(owner: ownerFromState())
+            showTransient(backup != nil ? "The saved shelf couldn't be read; a copy was kept in Application Support." : "The saved shelf couldn't be read.", seconds: 12)
         }
         if let id = resolvedSteamID { library = LibraryStore.load(steamID: id) }
         pageIndex = pagination.clamp(pageIndex)
@@ -635,10 +640,19 @@ enum SlideDirection: Sendable { case forward, backward }
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled, let self else { return }
-            do { try self.source.save(self.document) }
-            catch { Self.log.error("Save failed: \(String(describing: error), privacy: .public)") }
+            self.saveNow()
         }
     }
+
+    /// Writes the document immediately; called by the debounce and when the app is about to quit, so the
+    /// last half-second of edits is never lost.
+    func saveNow() {
+        guard mode != .tests, saveTask != nil || document.updatedAt > lastSavedAt else { return }
+        saveTask?.cancel(); saveTask = nil
+        do { try source.save(document); lastSavedAt = document.updatedAt }
+        catch { Self.log.error("Save failed: \(String(describing: error), privacy: .public)") }
+    }
+    private var lastSavedAt: Date = .distantPast
 
     func blurbIfNeeded(for appID: Int) async {
         guard let entry = document.entries.first(where: { $0.appID == appID }) else { return }
